@@ -1,0 +1,816 @@
+---
+title: 'Interfaces'
+description: 'Contract interfaces and ABIs for RektHub protocol'
+---
+
+## Overview
+
+This page provides the complete interfaces for all RektHub contracts. Use these for type-safe integration, ABI generation, and building custom contracts that interact with the protocol.
+
+<Tip>
+	**For TypeScript Users:** Generate TypeScript types from these interfaces using
+	[TypeChain](https://github.com/dethcrypto/TypeChain) for full type safety in
+	your frontend.
+</Tip>
+
+---
+
+## IRektHubFactory
+
+Interface for the RektHub Factory contract—the main entry point for all protocol interactions.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+interface IRektHubFactory {
+    /*//////////////////////////////////////////////////////////////
+                                ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    error RektHubFactory__InvalidVirtualReserves();
+    error RektHubFactory__InsufficientCreationFee();
+    error RektHubFactory__NoFeesToWithdraw();
+    error RektHubFactory__WithdrawalFailed();
+    error RektHubFactory__AddressAlreadyOccupied();
+    error RektHubFactory__CurveNotFound();
+
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event TokenCreated(
+        address indexed tokenAddress,
+        address indexed curveAddress,
+        address indexed creator,
+        string name,
+        string symbol,
+        string uri,
+        uint256 realNativeReserves,
+        uint256 realTokenReserves,
+        uint256 virtualNativeReserves,
+        uint256 virtualTokenReserves,
+        uint256 creationFee
+    );
+
+    event FeesWithdrawn(address indexed recipient, uint256 amount);
+
+    event TokenPurchased(
+        address indexed token,
+        address indexed curve,
+        address indexed buyer,
+        uint256 nativeIn,
+        uint256 tokensOut,
+        uint256 totalFee,
+        uint256 creatorFee,
+        uint256 platformFee,
+        uint256 newRealNativeReserves,
+        uint256 newRealTokenReserves,
+        uint256 newVirtualNativeReserves,
+        uint256 newVirtualTokenReserves
+    );
+
+    event TokenSold(
+        address indexed token,
+        address indexed curve,
+        address indexed seller,
+        uint256 tokensIn,
+        uint256 nativeOut,
+        uint256 totalFee,
+        uint256 creatorFee,
+        uint256 platformFee,
+        uint256 newRealNativeReserves,
+        uint256 newRealTokenReserves,
+        uint256 newVirtualNativeReserves,
+        uint256 newVirtualTokenReserves
+    );
+
+    event TokenMigrated(
+        address indexed tokenAddress,
+        address indexed curveAddress,
+        address indexed poolAddress,
+        string platformName,
+        uint256 nativeLiquidity,
+        uint256 tokenLiquidity,
+        uint256 migrationFee,
+        uint256 creatorFee,
+        uint256 platformFee
+    );
+
+    /*//////////////////////////////////////////////////////////////
+                            FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function createToken(
+        string calldata name,
+        string calldata symbol,
+        string calldata tokenURI
+    ) external payable returns (address tokenAddress, address curveAddress);
+
+    function createTokenDeterministic(
+        string calldata name,
+        string calldata symbol,
+        string calldata tokenURI,
+        bytes32 salt
+    ) external payable returns (address tokenAddress, address curveAddress);
+
+    function predictAddresses(
+        bytes32 salt
+    ) external view returns (address predictedToken, address predictedCurve);
+
+    function buy(
+        address token,
+        uint256 minTokensOut
+    ) external payable returns (uint256 tokensReceived);
+
+    function sell(
+        address token,
+        uint256 tokenAmount,
+        uint256 minNativeOut
+    ) external returns (uint256 nativeReceived);
+
+    function sellPercentage(
+        address token,
+        uint256 basisPoints,
+        uint256 minNativeOut
+    ) external returns (uint256 nativeReceived);
+
+    function migrate(
+        address token,
+        address migrator
+    ) external returns (address poolAddress, string memory platformName);
+
+    function withdrawFees() external;
+
+    function getCurve(address token) external view returns (address);
+
+    function getCreationFee() external view returns (uint256);
+}
+```
+
+**Key Functions:**
+
+- Token creation (standard and deterministic)
+- Trading (buy, sell, sell percentage)
+- Migration (graduation to DEX)
+- View functions (get curve, get fee)
+
+---
+
+## IBondingCurve
+
+Interface for individual bonding curve contracts—each token has its own isolated curve.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+interface IBondingCurve {
+    /*//////////////////////////////////////////////////////////////
+                                STRUCTS
+    //////////////////////////////////////////////////////////////*/
+
+    struct TradeResult {
+        uint256 amountOut;
+        uint256 totalFee;
+        uint256 creatorFee;
+        uint256 platformFee;
+    }
+
+    struct NewReserveState {
+        uint256 realNativeReserves;
+        uint256 realTokenReserves;
+        uint256 virtualNativeReserves;
+        uint256 virtualTokenReserves;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    error BondingCurve__InvalidToken();
+    error BondingCurve__InvalidCreator();
+    error BondingCurve__InvalidFactory();
+    error BondingCurve__TokenAlreadyGraduated();
+    error BondingCurve__TokenAlreadyBonded();
+    error BondingCurve__ZeroInput();
+    error BondingCurve__SlippageExceeded();
+    error BondingCurve__InsufficientReserves();
+    error BondingCurve__NotCreator();
+    error BondingCurve__NoFeesToClaim();
+    error BondingCurve__InvalidNewCreator();
+    error BondingCurve__InvalidPercentage();
+    error BondingCurve__AmountTooSmall();
+    error BondingCurve__PlatformFeeTransferFailed();
+    error BondingCurve__SellerPaymentFailed();
+    error BondingCurve__FeeTransferFailed();
+    error BondingCurve__TokenNotBonded();
+    error BondingCurve__NotFactory();
+    error BondingCurve__AlreadyInitialized();
+    error BondingCurve__UnauthorizedSeller();
+    error BondingCurve__InvalidMigrator();
+    error BondingCurve__MigrationFailed();
+    error BondingCurve__InsufficientLiquidityForMigration();
+
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event TokenPurchased(
+        address indexed buyer,
+        uint256 nativeIn,
+        uint256 tokensOut,
+        uint256 totalFee,
+        uint256 creatorFee,
+        uint256 platformFee,
+        uint256 newRealNativeReserves,
+        uint256 newRealTokenReserves,
+        uint256 newVirtualNativeReserves,
+        uint256 newVirtualTokenReserves
+    );
+
+    event TokenSold(
+        address indexed seller,
+        uint256 tokensIn,
+        uint256 nativeOut,
+        uint256 totalFee,
+        uint256 creatorFee,
+        uint256 platformFee,
+        uint256 newRealNativeReserves,
+        uint256 newRealTokenReserves,
+        uint256 newVirtualNativeReserves,
+        uint256 newVirtualTokenReserves
+    );
+
+    event CreatorFeesClaimed(
+        address indexed creator,
+        address indexed tokenAddress,
+        uint256 amount
+    );
+
+    event CreatorTransferred(
+        address indexed oldCreator,
+        address indexed newCreator
+    );
+
+    event TokenBonded(address indexed tokenAddress);
+
+    event TokenMigrated(
+        address indexed tokenAddress,
+        address indexed poolAddress,
+        string platformName,
+        uint256 nativeLiquidity,
+        uint256 tokenLiquidity,
+        uint256 migrationFee,
+        uint256 creatorFee,
+        uint256 platformFee
+    );
+
+    /*//////////////////////////////////////////////////////////////
+                            FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function initialize(
+        address token_,
+        address creator_,
+        address factory_,
+        uint256 virtualNativeReserves_
+    ) external;
+
+    function buy(
+        address buyer,
+        uint256 minTokensOut
+    )
+        external
+        payable
+        returns (TradeResult memory result, NewReserveState memory newReserves);
+
+    function sell(
+        address seller,
+        uint256 tokenAmount,
+        uint256 minNativeOut
+    )
+        external
+        returns (TradeResult memory result, NewReserveState memory newReserves);
+
+    function sellPercentage(
+        address seller,
+        uint256 basisPoints,
+        uint256 minNativeOut
+    )
+        external
+        returns (
+            uint256 tokenAmount,
+            TradeResult memory result,
+            NewReserveState memory newReserves
+        );
+
+    function migrate(
+        address migrator
+    )
+        external
+        returns (
+            address poolAddress,
+            string memory platformName,
+            uint256 nativeLiquidityAdded,
+            uint256 tokenLiquidityAdded,
+            uint256 migrationFee,
+            uint256 creatorFee,
+            uint256 platformFee
+        );
+
+    function claimCreatorFees() external returns (uint256 amountClaimed);
+
+    function transferCreator(address newCreator) external;
+
+    function getCurveState()
+        external
+        view
+        returns (
+            uint256 virtualNativeReserves,
+            uint256 virtualTokenReserves,
+            uint256 realNativeReserves,
+            uint256 realTokenReserves,
+            bool bonded,
+            bool graduated
+        );
+
+    function getCreatorInfo()
+        external
+        view
+        returns (address creatorAddress, uint256 accumulatedFees);
+
+    function getBuyPrice(
+        uint256 nativeAmount
+    )
+        external
+        view
+        returns (
+            uint256 tokensOut,
+            uint256 totalFee,
+            uint256 creatorFee,
+            uint256 platformFee
+        );
+
+    function getSellPrice(
+        uint256 tokenAmount
+    )
+        external
+        view
+        returns (
+            uint256 nativeOut,
+            uint256 totalFee,
+            uint256 creatorFee,
+            uint256 platformFee
+        );
+
+    function token() external view returns (address);
+
+    function factory() external view returns (address);
+
+    function creator() external view returns (address);
+
+    function isBonded() external view returns (bool);
+
+    function isGraduated() external view returns (bool);
+
+    function getAccumulatedCreatorFees() external view returns (uint256);
+
+    function VIRTUAL_TOKEN_RESERVES() external view returns (uint256);
+
+    function REAL_TOKEN_RESERVES() external view returns (uint256);
+}
+```
+
+**Key Functions:**
+
+- Trading (buy, sell)
+- Creator management (claim fees, transfer)
+- Migration (graduate to DEX)
+- View functions (state, prices, reserves)
+
+---
+
+## IRektHubToken
+
+Interface for RektHub creator tokens, standard ERC20 with metadata.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+interface IRektHubToken {
+    /*//////////////////////////////////////////////////////////////
+                                ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    error RektHubToken__MintingAlreadyDisabled();
+    error RektHubToken__OnlyFactory();
+    error RektHubToken__OnlyCreator();
+    error RektHubToken__InvalidFactory();
+    error RektHubToken__InvalidCreator();
+    error RektHubToken__InvalidNewURI();
+    error RektHubToken__AlreadyInitialized();
+    error RektHubToken__EmptyName();
+    error RektHubToken__EmptySymbol();
+    error RektHubToken__EmptyTokenURI();
+
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event MintingDisabled(uint256 timestamp);
+
+    event TokenURIUpdated(string newURI, uint256 timestamp);
+
+    /*//////////////////////////////////////////////////////////////
+                            FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function initialize(
+        string memory name_,
+        string memory symbol_,
+        string memory tokenURI_,
+        address creator_,
+        address factory_
+    ) external;
+
+    function mintAndDisableMinting(address to) external;
+
+    function setTokenURI(string calldata newURI) external;
+
+    function name() external view returns (string memory);
+
+    function symbol() external view returns (string memory);
+
+    function tokenURI() external view returns (string memory);
+
+    function creator() external view returns (address);
+
+    function factory() external view returns (address);
+
+    function mintingDisabled() external view returns (bool);
+
+    function decimals() external pure returns (uint8);
+
+    function TOTAL_SUPPLY() external view returns (uint256);
+
+    // Standard ERC20
+    function totalSupply() external view returns (uint256);
+
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(address to, uint256 amount) external returns (bool);
+
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256);
+
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
+
+    // ERC20 Events
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
+}
+```
+
+**Key Functions:**
+
+- ERC20 standard (transfer, approve, balanceOf, etc.)
+- Metadata (tokenURI, setTokenURI)
+- View functions (creator, factory, mintingDisabled)
+
+---
+
+## IDEXMigrator
+
+Interface for DEX-specific migration contracts. Implement this to create custom migrators for any DEX.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+interface IDEXMigrator {
+    /**
+     * @notice Migrates bonding curve liquidity to DEX
+     * @param token Token address
+     * @param nativeAmount Amount of native tokens (after migration fee)
+     * @param tokenAmount Amount of tokens (should be ~223M if fully bonded)
+     * @return poolAddress Address of created liquidity pool
+     * @return platformName Name of the DEX platform
+     */
+    function migrate(
+        address token,
+        uint256 nativeAmount,
+        uint256 tokenAmount
+    )
+        external
+        payable
+        returns (address poolAddress, string memory platformName);
+
+    /**
+     * @notice Get the platform name this migrator serves
+     * @return Platform identifier (e.g., "Uniswap V2", "PancakeSwap")
+     */
+    function platformName() external pure returns (string memory);
+}
+```
+
+**Use Cases:**
+
+- Create custom migrators for any DEX (Uniswap, PancakeSwap, etc.)
+- Handle chain-specific liquidity provision
+- Support multiple DEX integrations
+
+**Example Implementation:**
+
+```solidity
+contract UniswapV2Migrator is IDEXMigrator {
+    IUniswapV2Factory public immutable factory;
+    IUniswapV2Router02 public immutable router;
+
+    function migrate(
+        address token,
+        uint256 nativeAmount,
+        uint256 tokenAmount
+    ) external payable returns (address poolAddress, string memory) {
+        // Approve router
+        IERC20(token).approve(address(router), tokenAmount);
+
+        // Add liquidity
+        (,, uint liquidity) = router.addLiquidityETH{value: nativeAmount}(
+            token,
+            tokenAmount,
+            0, // slippage handled offchain
+            0,
+            address(this), // LP tokens to this contract
+            block.timestamp
+        );
+
+        // Get pool address
+        poolAddress = factory.getPair(token, router.WETH());
+
+        return (poolAddress, "Uniswap V2");
+    }
+
+    function platformName() external pure returns (string memory) {
+        return "Uniswap V2";
+    }
+}
+```
+
+---
+
+## Minimal ABIs for Common Operations
+
+### Factory - Create Token
+
+```json
+[
+	{
+		"type": "function",
+		"name": "createToken",
+		"inputs": [
+			{ "name": "name", "type": "string" },
+			{ "name": "symbol", "type": "string" },
+			{ "name": "tokenURI", "type": "string" }
+		],
+		"outputs": [
+			{ "name": "tokenAddress", "type": "address" },
+			{ "name": "curveAddress", "type": "address" }
+		],
+		"stateMutability": "payable"
+	},
+	{
+		"type": "function",
+		"name": "getCreationFee",
+		"inputs": [],
+		"outputs": [{ "name": "", "type": "uint256" }],
+		"stateMutability": "view"
+	}
+]
+```
+
+### Factory - Trade
+
+```json
+[
+	{
+		"type": "function",
+		"name": "buy",
+		"inputs": [
+			{ "name": "token", "type": "address" },
+			{ "name": "minTokensOut", "type": "uint256" }
+		],
+		"outputs": [{ "name": "tokensReceived", "type": "uint256" }],
+		"stateMutability": "payable"
+	},
+	{
+		"type": "function",
+		"name": "sell",
+		"inputs": [
+			{ "name": "token", "type": "address" },
+			{ "name": "tokenAmount", "type": "uint256" },
+			{ "name": "minNativeOut", "type": "uint256" }
+		],
+		"outputs": [{ "name": "nativeReceived", "type": "uint256" }],
+		"stateMutability": "nonpayable"
+	}
+]
+```
+
+### Curve - Get Quote
+
+```json
+[
+	{
+		"type": "function",
+		"name": "getBuyPrice",
+		"inputs": [{ "name": "nativeAmount", "type": "uint256" }],
+		"outputs": [
+			{ "name": "tokensOut", "type": "uint256" },
+			{ "name": "totalFee", "type": "uint256" },
+			{ "name": "creatorFee", "type": "uint256" },
+			{ "name": "platformFee", "type": "uint256" }
+		],
+		"stateMutability": "view"
+	},
+	{
+		"type": "function",
+		"name": "getSellPrice",
+		"inputs": [{ "name": "tokenAmount", "type": "uint256" }],
+		"outputs": [
+			{ "name": "nativeOut", "type": "uint256" },
+			{ "name": "totalFee", "type": "uint256" },
+			{ "name": "creatorFee", "type": "uint256" },
+			{ "name": "platformFee", "type": "uint256" }
+		],
+		"stateMutability": "view"
+	}
+]
+```
+
+### Curve - State
+
+```json
+[
+	{
+		"type": "function",
+		"name": "getCurveState",
+		"inputs": [],
+		"outputs": [
+			{ "name": "virtualNativeReserves", "type": "uint256" },
+			{ "name": "virtualTokenReserves", "type": "uint256" },
+			{ "name": "realNativeReserves", "type": "uint256" },
+			{ "name": "realTokenReserves", "type": "uint256" },
+			{ "name": "bonded", "type": "bool" },
+			{ "name": "graduated", "type": "bool" }
+		],
+		"stateMutability": "view"
+	}
+]
+```
+
+---
+
+## TypeScript Type Generation
+
+Generate TypeScript types for type-safe integration:
+
+### Using TypeChain
+
+```bash
+npm install --save-dev typechain @typechain/ethers-v6
+```
+
+```javascript
+// typechain.config.js
+module.exports = {
+	target: 'ethers-v6',
+	outDir: 'src/types',
+	contracts: ['interfaces/**/*.sol'],
+};
+```
+
+Then use the generated types:
+
+```typescript
+import { IRektHubFactory } from './types';
+import { ethers } from 'ethers';
+
+const factory: IRektHubFactory = new ethers.Contract(
+	FACTORY_ADDRESS,
+	FACTORY_ABI,
+	provider
+) as IRektHubFactory;
+
+// Now TypeScript knows all function signatures
+const tx = await factory.createToken('Creator Token', 'CRTR', 'ipfs://...', {
+	value: creationFee,
+});
+
+// Type-safe event listening
+factory.on(
+	'TokenCreated',
+	(tokenAddress: string, curveAddress: string, creator: string) => {
+		console.log('New token:', tokenAddress);
+	}
+);
+```
+
+---
+
+## Integration Checklist
+
+<Steps>
+	<Step title='Import Interfaces'>
+		Copy the interfaces you need or install from npm (when available)
+	</Step>
+
+    <Step title='Generate ABIs'>
+    	Extract ABIs from interfaces using Hardhat or Foundry
+    </Step>
+
+    <Step title='Generate Types'>
+    	Use TypeChain for TypeScript type generation
+    </Step>
+
+    <Step title='Create Contract Instances'>
+    	Instantiate contracts with ethers.js or viem
+    </Step>
+
+    <Step title='Handle Errors'>
+    	Implement proper error handling for custom errors
+    </Step>
+
+</Steps>
+
+---
+
+## Custom Error Handling
+
+All RektHub contracts use custom errors for gas efficiency. Handle them properly:
+
+```typescript
+try {
+	await factory.buy(tokenAddress, minTokensOut, { value: amount });
+} catch (error: any) {
+	// Parse custom errors
+	if (error.message.includes('BondingCurve__SlippageExceeded')) {
+		alert('Price moved! Increase slippage tolerance.');
+	} else if (error.message.includes('BondingCurve__TokenAlreadyBonded')) {
+		alert('Token is fully bonded. Trading closed.');
+	} else if (error.message.includes('RektHubFactory__CurveNotFound')) {
+		alert('Token not found. Check address.');
+	} else {
+		console.error('Unknown error:', error);
+	}
+}
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Quick Start'
+		icon='rocket'
+		href='/evm/quickstart'
+	>
+		Start integrating with examples
+	</Card>
+	<Card
+		title='Events Reference'
+		icon='bell'
+		href='/evm/reference/events'
+	>
+		Listen to protocol events
+	</Card>
+	<Card
+		title='Libraries'
+		icon='book'
+		href='/evm/reference/libraries'
+	>
+		Bonding curve math utilities
+	</Card>
+	<Card
+		title='Factory Contract'
+		icon='industry'
+		href='/evm/contracts/factory'
+	>
+		Learn about the orchestrator
+	</Card>
+</CardGroup>

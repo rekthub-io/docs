@@ -1,0 +1,778 @@
+---
+title: 'BondingCurve'
+description: 'Isolated trading engine for each creator token'
+---
+
+## Overview
+
+The **BondingCurve** contract is the heart of price discovery and trading for creator tokens. Each token gets its own isolated bonding curve instance, think of it as a dedicated trading venue with its own reserves, fees, and state management.
+
+<Info>
+	**Key Insight:** RektHub doesn't use one global curve. Each creator token has a
+	**dedicated** BondingCurve contract, ensuring isolated liquidity and
+	independent price action.
+</Info>
+
+## Purpose & Design
+
+### What It Does
+
+- **Price Discovery**: Implements constant product (x\*y=k) bonding curve math
+- **Trading Engine**: Handles all buy/sell transactions for one specific token
+- **Fee Management**: Accumulates creator fees (30% of trading fees, 60% of migration fees)
+- **State Tracking**: Manages reserves, bonding status, graduation state
+- **Creator Compensation**: Stores and distributes earnings to token creators
+
+### Why Isolation Matters
+
+Each token having its own curve means:
+
+- **Independent Markets**: One token's activity doesn't affect another's liquidity
+- **Fair Launch**: Every token starts with identical initial conditions
+- **Predictable Economics**: Creators know exactly how their token will behave
+- **Security**: A bug or exploit in one curve doesn't cascade to others
+
+## Token Lifecycle States
+
+A bonding curve progresses through three states:
+
+<Steps>
+	<Step title='Active'>
+		Normal trading state. Tokens can be bought and sold freely. - `s_bonded =
+		false` - `s_graduated = false`
+	</Step>
+
+    <Step title='Bonded'>
+    	All 850M tradeable tokens have been sold. Token is ready for graduation. -
+    	`s_bonded = true` - `s_graduated = false` - Trading is **disabled** - Waiting
+    	for migration to DEX
+    </Step>
+
+    <Step title='Graduated'>
+    	Token has migrated to DEX. Curve is permanently closed. - `s_graduated = true`
+    	- All trading **disabled** - Reserves transferred to liquidity pool - Creator
+    	fees still claimable
+    </Step>
+
+</Steps>
+
+## Key Constants
+
+```solidity
+uint256 public constant VIRTUAL_TOKEN_RESERVES = 1_073_000_000 * 10**18;
+uint256 public constant REAL_TOKEN_RESERVES = 850_000_000 * 10**18;
+
+uint256 private constant PROTOCOL_FEE_BPS = 100; // 1%
+uint256 private constant CREATOR_SHARE_BPS = 3000; // 30% of protocol fee
+uint256 private constant CREATOR_SHARE_MIGRATION_BPS = 6000; // 60% of migration fee
+uint256 private constant MIGRATION_FEE_BPS = 1200; // 12%
+```
+
+<Note>
+	**Token Distribution:** - Total Supply: 1,000,000,000 (1B tokens) - Tradeable
+	Supply: 850,000,000 (850M tokens) - Reserved: 150,000,000 (150M tokens for
+	graduation liquidity) - Virtual Reserves: 1,073,000,000 (1.073B for pricing
+	math)
+</Note>
+
+## Core Functions
+
+### Trading Functions
+
+#### `buy`
+
+Purchase creator tokens from the bonding curve.
+
+<ParamField
+	path='buyer'
+	type='address'
+	required
+>
+	Address to receive the tokens
+</ParamField>
+
+<ParamField
+	path='minTokensOut'
+	type='uint256'
+	required
+>
+	Minimum tokens expected (slippage protection)
+</ParamField>
+
+**Returns:**
+
+- `result`: TradeResult struct with amounts and fees
+- `newReserves`: Updated reserve state
+
+**Events Emitted:**
+
+- `TokenPurchased`
+- `TokenBonded` (if this purchase bonds the token)
+
+**Fee Structure:**
+
+- Total fee: 1% of input amount
+- Creator gets: 30% of fee (0.3% of input)
+- Platform gets: 70% of fee (0.7% of input)
+
+**Example:**
+
+```javascript
+const curve = new ethers.Contract(curveAddress, CURVE_ABI, signer);
+
+const amountToSpend = ethers.parseEther('0.1');
+
+// Get quote first
+const [expectedTokens, totalFee, creatorFee, platformFee] =
+	await curve.getBuyPrice(amountToSpend);
+
+console.log('Will receive ~', ethers.formatEther(expectedTokens), 'tokens');
+console.log('Creator earns:', ethers.formatEther(creatorFee));
+
+// Execute buy with 5% slippage tolerance
+const minTokensOut = (expectedTokens * 95n) / 100n;
+
+const tx = await curve.buy(
+	await signer.getAddress(), // buyer
+	minTokensOut,
+	{ value: amountToSpend }
+);
+
+const receipt = await tx.wait();
+
+// Check if token bonded
+const bondedEvent = receipt.logs
+	.map((log) => curve.interface.parseLog(log))
+	.find((e) => e?.name === 'TokenBonded');
+
+if (bondedEvent) {
+	console.log('Token fully bonded! Ready for graduation.');
+}
+```
+
+<Warning>
+	**Bonding Trigger:** When the last token is purchased, the curve automatically
+	transitions to "bonded" state. All further trading is disabled until
+	graduation.
+</Warning>
+
+---
+
+#### `sell`
+
+Sell creator tokens back to the bonding curve.
+
+<ParamField
+	path='seller'
+	type='address'
+	required
+>
+	Address selling the tokens
+</ParamField>
+
+<ParamField
+	path='tokenAmount'
+	type='uint256'
+	required
+>
+	Amount of tokens to sell
+</ParamField>
+
+<ParamField
+	path='minNativeOut'
+	type='uint256'
+	required
+>
+	Minimum native tokens expected (slippage protection)
+</ParamField>
+
+**Returns:**
+
+- `result`: TradeResult struct
+- `newReserves`: Updated reserve state
+
+**Events Emitted:**
+
+- `TokenSold`
+
+**Fee Structure:**
+
+- Total fee: 1% of output amount
+- Creator gets: 30% of fee
+- Platform gets: 70% of fee
+
+**Example:**
+
+```javascript
+// 1. Approve curve to spend tokens
+const token = new ethers.Contract(tokenAddress, TOKEN_ABI, signer);
+await token.approve(curveAddress, ethers.MaxUint256);
+
+// 2. Get quote
+const amountToSell = ethers.parseEther('1000');
+const [expectedNative, totalFee, creatorFee, platformFee] =
+	await curve.getSellPrice(amountToSell);
+
+// 3. Execute sell with slippage protection
+const minNativeOut = (expectedNative * 95n) / 100n;
+
+const tx = await curve.sell(
+	await signer.getAddress(),
+	amountToSell,
+	minNativeOut
+);
+```
+
+<Tip>
+	**Direct vs Factory:** You can call `sell()` directly on the curve or through
+	the Factory. Both work identically, but Factory is recommended for consistency.
+</Tip>
+
+---
+
+#### `sellPercentage`
+
+Sell a percentage of your token balance.
+
+<ParamField
+	path='seller'
+	type='address'
+	required
+>
+	Address selling the tokens
+</ParamField>
+
+<ParamField
+	path='basisPoints'
+	type='uint256'
+	required
+>
+	Percentage in basis points (5000 = 50%)
+</ParamField>
+
+<ParamField
+	path='minNativeOut'
+	type='uint256'
+	required
+>
+	Minimum native expected
+</ParamField>
+
+**Returns:**
+
+- `tokenAmount`: Actual tokens sold
+- `result`: TradeResult struct
+- `newReserves`: Updated reserve state
+
+**Example:**
+
+```javascript
+// Sell 25% of balance
+const tx = await curve.sellPercentage(
+	await signer.getAddress(),
+	2500, // 25%
+	minNativeOut
+);
+
+const receipt = await tx.wait();
+
+// Parse event to see exact amount sold
+const event = receipt.logs
+	.map((log) => curve.interface.parseLog(log))
+	.find((e) => e?.name === 'TokenSold');
+
+console.log('Sold:', ethers.formatEther(event.args.tokensIn), 'tokens');
+console.log('Received:', ethers.formatEther(event.args.nativeOut), 'native');
+```
+
+---
+
+### Creator Functions
+
+#### `claimCreatorFees`
+
+Creator claims their accumulated trading and migration fees. **Creator-only.**
+
+**Returns:**
+
+- `amountClaimed`: Amount of fees claimed
+
+**Events Emitted:**
+
+- `CreatorFeesClaimed`
+
+**Example:**
+
+```javascript
+// Check accumulated fees first
+const [creatorAddress, accumulatedFees] = await curve.getCreatorInfo();
+console.log('Claimable fees:', ethers.formatEther(accumulatedFees));
+
+// Claim (must be called by creator)
+const tx = await curve.claimCreatorFees();
+const receipt = await tx.wait();
+
+const event = receipt.logs
+	.map((log) => curve.interface.parseLog(log))
+	.find((e) => e?.name === 'CreatorFeesClaimed');
+
+console.log('Claimed:', ethers.formatEther(event.args.amount));
+```
+
+<Note>
+	**Fee Accumulation:** Fees accumulate in the curve contract over time. Creators
+	can claim whenever they want, there's no rush, and fees don't expire.
+</Note>
+
+---
+
+#### `transferCreator`
+
+Transfer creator role to a new address. **Creator-only.**
+
+<ParamField
+	path='newCreator'
+	type='address'
+	required
+>
+	New creator address
+</ParamField>
+
+**Events Emitted:**
+
+- `CreatorTransferred`
+
+**Example:**
+
+```javascript
+// Transfer creator role (for account recovery or ownership transfer)
+const newCreatorAddress = '0x...';
+const tx = await curve.transferCreator(newCreatorAddress);
+await tx.wait();
+
+console.log('Creator role transferred to:', newCreatorAddress);
+```
+
+<Warning>
+	**Irreversible:** Once you transfer creator role, you cannot get it back unless
+	the new creator transfers it to you. Use with caution!
+</Warning>
+
+---
+
+### Migration Function
+
+#### `migrate`
+
+Graduate the token to DEX. **Factory-only function.**
+
+<ParamField
+	path='migrator'
+	type='address'
+	required
+>
+	DEX migrator contract address (must implement IDEXMigrator)
+</ParamField>
+
+**Returns:**
+
+- `poolAddress`: Address of created liquidity pool
+- `platformName`: Name of the DEX
+- `nativeLiquidityAdded`: Net native liquidity added to pool
+- `tokenLiquidityAdded`: Token liquidity added to pool
+- `migrationFee`: Total 12% fee
+- `creatorFee`: 60% of migration fee (7.2% of liquidity)
+- `platformFee`: 40% of migration fee (4.8% of liquidity)
+
+**Requirements:**
+
+- Token must be **bonded** (all 850M tokens sold)
+- Token must not be **graduated** yet
+- Only **Factory** can call this function
+
+**Events Emitted:**
+
+- `TokenMigrated`
+
+**Example:**
+
+```javascript
+// Only Factory owner can trigger this
+// Creators cannot manually graduate their tokens
+
+// Check if ready for migration
+const isBonded = await curve.isBonded();
+const isGraduated = await curve.isGraduated();
+
+if (isBonded && !isGraduated) {
+	console.log('Token is ready for graduation!');
+	// Wait for RektHub automated system to trigger migration
+}
+```
+
+<Note>
+	**For Creators:** You don't call this function directly. Once your token bonds
+	(all tokens sold), RektHub will handle the graduation process. Your creator
+	fees from the migration will be automatically accumulated.
+</Note>
+
+---
+
+### View Functions
+
+#### `getCurveState`
+
+Get complete curve state information.
+
+**Returns:**
+
+- `virtualNativeReserves`: Current virtual native reserves
+- `virtualTokenReserves`: Current virtual token reserves
+- `realNativeReserves`: Actual native liquidity
+- `realTokenReserves`: Actual tokens available
+- `bonded`: Whether all tokens are sold
+- `graduated`: Whether token has migrated
+
+**Example:**
+
+```javascript
+const [
+	virtualNativeReserves,
+	virtualTokenReserves,
+	realNativeReserves,
+	realTokenReserves,
+	bonded,
+	graduated,
+] = await curve.getCurveState();
+
+console.log('Real token liquidity:', ethers.formatEther(realTokenReserves));
+console.log('Bonded:', bonded);
+console.log('Graduated:', graduated);
+
+// Calculate bonding progress
+const TOTAL_TRADEABLE = 850_000_000n * 10n ** 18n;
+const sold = TOTAL_TRADEABLE - realTokenReserves;
+const progress = (sold * 100n) / TOTAL_TRADEABLE;
+console.log('Bonding progress:', progress.toString() + '%');
+```
+
+---
+
+#### `getCreatorInfo`
+
+Get creator address and accumulated fees.
+
+**Returns:**
+
+- `creatorAddress`: Current creator
+- `accumulatedFees`: Claimable fees
+
+**Example:**
+
+```javascript
+const [creator, fees] = await curve.getCreatorInfo();
+console.log('Creator:', creator);
+console.log('Unclaimed fees:', ethers.formatEther(fees));
+```
+
+---
+
+#### `getBuyPrice`
+
+Calculate quote for buying tokens.
+
+<ParamField
+	path='nativeAmount'
+	type='uint256'
+	required
+>
+	Amount of native tokens to spend
+</ParamField>
+
+**Returns:**
+
+- `tokensOut`: Expected tokens to receive
+- `totalFee`: Total fee amount
+- `creatorFee`: Creator's portion
+- `platformFee`: Platform's portion
+
+**Example:**
+
+```javascript
+const amountToSpend = ethers.parseEther('0.1');
+const [tokensOut, totalFee, creatorFee, platformFee] = await curve.getBuyPrice(
+	amountToSpend
+);
+
+console.log('You will receive:', ethers.formatEther(tokensOut), 'tokens');
+console.log('Total fee:', ethers.formatEther(totalFee));
+console.log('Creator earns:', ethers.formatEther(creatorFee));
+console.log('Effective price:', amountToSpend / tokensOut, 'native per token');
+```
+
+---
+
+#### `getSellPrice`
+
+Calculate quote for selling tokens.
+
+<ParamField
+	path='tokenAmount'
+	type='uint256'
+	required
+>
+	Amount of tokens to sell
+</ParamField>
+
+**Returns:**
+
+- `nativeOut`: Expected native tokens to receive (after fees)
+- `totalFee`: Total fee amount
+- `creatorFee`: Creator's portion
+- `platformFee`: Platform's portion
+
+**Example:**
+
+```javascript
+const tokensToSell = ethers.parseEther('1000');
+const [nativeOut, totalFee, creatorFee, platformFee] = await curve.getSellPrice(
+	tokensToSell
+);
+
+console.log('You will receive:', ethers.formatEther(nativeOut), 'native');
+console.log('Creator earns:', ethers.formatEther(creatorFee));
+```
+
+---
+
+## Bonding Curve Math
+
+RektHub uses a **constant product** formula: `x * y = k`
+
+Where:
+
+- `x` = virtual native reserves
+- `y` = virtual token reserves
+- `k` = constant product
+
+### Buy Formula
+
+```
+tokensOut = (nativeIn * virtualTokenReserves) / (virtualNativeReserves + nativeIn)
+```
+
+### Sell Formula
+
+```
+nativeOut = (tokensIn * virtualNativeReserves) / (virtualTokenReserves + tokensIn)
+```
+
+<Tip>
+	**Why Virtual Reserves?** Virtual reserves create an initial price and prevent
+	extreme slippage on early trades. Only **real** reserves represent actual
+	liquidity.
+</Tip>
+
+### Price Evolution
+
+As tokens are bought:
+
+- Virtual native reserves ↑
+- Virtual token reserves ↓
+- Price per token ↑ (exponentially)
+
+Example progression:
+
+```
+Initial: 1 token ≈ 0.000001 native
+25% sold: 1 token ≈ 0.000003 native
+50% sold: 1 token ≈ 0.000012 native
+75% sold: 1 token ≈ 0.000048 native
+Bonded: 1 token ≈ 0.0002 native
+```
+
+---
+
+## Events
+
+### TokenPurchased
+
+```solidity
+event TokenPurchased(
+    address indexed buyer,
+    uint256 nativeIn,
+    uint256 tokensOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+---
+
+### TokenSold
+
+```solidity
+event TokenSold(
+    address indexed seller,
+    uint256 tokensIn,
+    uint256 nativeOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+---
+
+### TokenBonded
+
+```solidity
+event TokenBonded(
+    address indexed tokenAddress
+);
+```
+
+Emitted when the last token is sold and curve enters "bonded" state.
+
+---
+
+### TokenMigrated
+
+```solidity
+event TokenMigrated(
+    address indexed tokenAddress,
+    address indexed poolAddress,
+    string platformName,
+    uint256 nativeLiquidity,
+    uint256 tokenLiquidity,
+    uint256 migrationFee,
+    uint256 creatorFee,
+    uint256 platformFee
+);
+```
+
+---
+
+### CreatorFeesClaimed
+
+```solidity
+event CreatorFeesClaimed(
+    address indexed creator,
+    address indexed tokenAddress,
+    uint256 amount
+);
+```
+
+---
+
+### CreatorTransferred
+
+```solidity
+event CreatorTransferred(
+    address indexed oldCreator,
+    address indexed newCreator
+);
+```
+
+---
+
+## Integration Patterns
+
+### Build a Trading Dashboard
+
+```javascript
+async function getTokenMetrics(curveAddress) {
+	const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
+
+	const [
+		virtualNativeReserves,
+		virtualTokenReserves,
+		realNativeReserves,
+		realTokenReserves,
+		bonded,
+		graduated,
+	] = await curve.getCurveState();
+
+	const [creator, accumulatedFees] = await curve.getCreatorInfo();
+
+	// Calculate metrics
+	const TOTAL_TRADEABLE = 850_000_000n * 10n ** 18n;
+	const tokensSold = TOTAL_TRADEABLE - realTokenReserves;
+	const bondingProgress = (tokensSold * 100n) / TOTAL_TRADEABLE;
+	const currentPrice = virtualNativeReserves / virtualTokenReserves;
+
+	return {
+		bonded,
+		graduated,
+		bondingProgress: Number(bondingProgress),
+		currentPrice: Number(ethers.formatEther(currentPrice)),
+		liquidity: Number(ethers.formatEther(realNativeReserves)),
+		tokensAvailable: Number(ethers.formatEther(realTokenReserves)),
+		creator,
+		creatorEarnings: Number(ethers.formatEther(accumulatedFees)),
+	};
+}
+```
+
+### Monitor Bonding Progress
+
+```javascript
+curve.on('TokenPurchased', async (buyer, nativeIn, tokensOut, ...rest) => {
+	const [, , realNativeReserves, realTokenReserves, bonded] =
+		await curve.getCurveState();
+
+	const TOTAL = 850_000_000n * 10n ** 18n;
+	const progress = ((TOTAL - realTokenReserves) * 100n) / TOTAL;
+
+	console.log(`Bonding progress: ${progress}%`);
+
+	if (bonded) {
+		console.log('🎉 TOKEN BONDED! Ready for graduation!');
+		// Notify users, trigger UI updates, etc.
+	}
+});
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Token Contract'
+		icon='coins'
+		href='/evm/contracts/token'
+	>
+		Learn about the ERC20 token standard
+	</Card>
+	<Card
+		title='Buying Guide'
+		icon='cart-shopping'
+		href='/evm/guides/buying-tokens'
+	>
+		Deep dive into buying strategies
+	</Card>
+	<Card
+		title='Bonding Curves Explained'
+		icon='chart-line'
+		href='/getting-started/bonding-curves'
+	>
+		Understand the math behind pricing
+	</Card>
+	<Card
+		title='Migration Process'
+		icon='graduation-cap'
+		href='/getting-started/migration'
+	>
+		Learn about token graduation
+	</Card>
+</CardGroup>

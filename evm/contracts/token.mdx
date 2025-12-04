@@ -1,0 +1,566 @@
+---
+title: 'RektHubToken'
+description: 'Creator token standard with metadata and permanent supply lock'
+---
+
+## Overview
+
+**RektHubToken** is RektHub's implementation of creator tokens, standard ERC20 tokens with metadata URI support and a one-time mint mechanism. Every creator token on RektHub uses this battle-tested standard, ensuring consistency, security, and gas efficiency.
+
+<Info>
+	**For Creators:** Your token is a standard ERC20, which means it's compatible
+	with all wallets, DEXes, and DeFi protocols. The metadata URI lets you add
+	personality, your brand, socials, and community links.
+</Info>
+
+## Purpose & Design
+
+### What Makes It Special
+
+- **Standard ERC20**: Full compatibility with existing infrastructure
+- **Metadata URI**: Link to your token's identity (name, image, socials)
+- **One-Time Mint**: Exactly 1 billion tokens minted once, then permanently locked
+- **Gas Efficient**: Uses minimal proxy pattern (EIP-1167) to clone a master implementation
+- **Creator Control**: Only creators can update metadata
+
+### Why One-Time Mint?
+
+```solidity
+uint256 public constant TOTAL_SUPPLY = 1_000_000_000 * 10**18; // 1 billion
+```
+
+Supply is hardcoded and minted exactly once during initialization:
+
+1. Token is deployed by Factory
+2. Factory calls `mintAndDisableMinting()`
+3. 1B tokens go to the bonding curve
+4. Minting is **permanently disabled**
+
+This ensures:
+
+- **No inflation**: Supply cannot increase
+- **Predictable economics**: Creators and traders know the total supply upfront
+- **Security**: No rug pulls via minting
+
+---
+
+## Token Distribution
+
+When a token is created, the 1 billion total supply is distributed as follows:
+
+| Allocation        | Amount            | Purpose                                 |
+| ----------------- | ----------------- | --------------------------------------- |
+| **Bonding Curve** | 1,000,000,000     | Sent to curve on creation               |
+| └─ **Tradeable**  | 850,000,000 (85%) | Available for trading via bonding curve |
+| └─ **Reserved**   | 150,000,000 (15%) | Held in curve for graduation liquidity  |
+
+<Note>
+	**Why 150M Reserved?** When a token graduates to DEX, it needs token liquidity
+	for the pool. The reserved tokens ensure there's always liquidity available for
+	graduation.
+</Note>
+
+---
+
+## Key Functions
+
+### Core ERC20
+
+RektHubToken implements standard ERC20 functions:
+
+```solidity
+function transfer(address to, uint256 amount) external returns (bool);
+function approve(address spender, uint256 amount) external returns (bool);
+function transferFrom(address from, address to, uint256 amount) external returns (bool);
+function balanceOf(address account) external view returns (uint256);
+function allowance(address owner, address spender) external view returns (uint256);
+```
+
+<Tip>
+	**For Integrators:** Treat RektHub tokens like any other ERC20. Standard
+	patterns (approve/transferFrom, balanceOf checks) all work identically.
+</Tip>
+
+---
+
+### Metadata Management
+
+#### `tokenURI`
+
+Get the metadata URI for this token.
+
+**Returns:**
+
+- `string`: URI pointing to token metadata JSON (usually IPFS/Arweave)
+
+**Example:**
+
+```javascript
+const token = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
+const uri = await token.tokenURI();
+console.log('Metadata URI:', uri); // "ipfs://Qm..."
+
+// Fetch metadata
+const response = await fetch(uri.replace('ipfs://', 'https://ipfs.io/ipfs/'));
+const metadata = await response.json();
+console.log('Token name:', metadata.name);
+console.log('Description:', metadata.description);
+console.log('Image:', metadata.image);
+```
+
+---
+
+#### `setTokenURI`
+
+Update the token's metadata URI. **Creator-only.**
+
+<ParamField
+	path='newURI'
+	type='string'
+	required
+>
+	New metadata URI (must not be empty)
+</ParamField>
+
+**Events Emitted:**
+
+- `TokenURIUpdated`
+
+**Example:**
+
+```javascript
+// Only creator can call this
+const newURI = 'ipfs://QmNewMetadata...';
+const tx = await token.setTokenURI(newURI);
+await tx.wait();
+
+console.log('Metadata updated to:', newURI);
+```
+
+<Warning>
+	**Creator Responsibility:** Ensure your metadata URI points to permanent
+	storage (IPFS, Arweave). Centralized hosting (your server) can break if the
+	server goes down.
+</Warning>
+
+---
+
+### View Functions
+
+#### `creator`
+
+Get the token creator's address.
+
+**Returns:**
+
+- `address`: Creator address
+
+**Example:**
+
+```javascript
+const creatorAddress = await token.creator();
+console.log('Token created by:', creatorAddress);
+```
+
+---
+
+#### `factory`
+
+Get the Factory contract address.
+
+**Returns:**
+
+- `address`: RektHub Factory address
+
+**Example:**
+
+```javascript
+const factoryAddress = await token.factory();
+console.log('Factory:', factoryAddress);
+```
+
+---
+
+#### `mintingDisabled`
+
+Check if minting is permanently disabled (always returns `true` after initialization).
+
+**Returns:**
+
+- `bool`: Always `true` after the one-time mint
+
+**Example:**
+
+```javascript
+const disabled = await token.mintingDisabled();
+console.log('Minting disabled:', disabled); // true
+```
+
+---
+
+#### `decimals`
+
+Get token decimals (always 18).
+
+**Returns:**
+
+- `uint8`: 18 (standard for EVM tokens)
+
+---
+
+## Metadata Structure
+
+Your `tokenURI` should point to a JSON file with this structure:
+
+```json
+{
+	"name": "Creator Coin",
+	"symbol": "CRTR",
+	"description": "The official token of [Creator Name]. Join our community and support our mission.",
+	"image": "ipfs://QmImageHash...",
+	"external_url": "https://your-website.com",
+	"attributes": [
+		{
+			"trait_type": "Creator",
+			"value": "YourName"
+		},
+		{
+			"trait_type": "Launch Date",
+			"value": "2025-01-15"
+		}
+	],
+	"social_links": {
+		"twitter": "https://x.com/yourusername",
+		"telegram": "https://t.me/yourchannel",
+		"discord": "https://discord.gg/yourserver",
+		"website": "https://your-website.com"
+	}
+}
+```
+
+### Required Fields
+
+<ParamField
+	path='name'
+	type='string'
+	required
+>
+	Token name (e.g., "Creator Coin")
+</ParamField>
+
+<ParamField
+	path='symbol'
+	type='string'
+	required
+>
+	Token symbol (e.g., "CRTR")
+</ParamField>
+
+<ParamField
+	path='description'
+	type='string'
+	required
+>
+	Brief description of your token and community
+</ParamField>
+
+<ParamField
+	path='image'
+	type='string'
+	required
+>
+	IPFS/Arweave URI for token logo/artwork
+</ParamField>
+
+### Optional Fields
+
+<ParamField
+	path='external_url'
+	type='string'
+>
+	Your website or landing page
+</ParamField>
+
+<ParamField
+	path='attributes'
+	type='array'
+>
+	Token traits (creator name, launch date, etc.)
+</ParamField>
+
+<ParamField
+	path='social_links'
+	type='object'
+>
+	Links to your social presence (Twitter, Telegram, Discord, etc.)
+</ParamField>
+
+<Tip>
+	**Image Best Practices:** - Use square images (1:1 ratio) - Recommended size:
+	500x500px minimum - Formats: PNG, JPG, SVG, GIF - Host on IPFS or Arweave for
+	permanence
+</Tip>
+
+---
+
+## Events
+
+### TokenURIUpdated
+
+Emitted when creator updates the metadata URI.
+
+```solidity
+event TokenURIUpdated(
+    string newURI,
+    uint256 timestamp
+);
+```
+
+**Example:**
+
+```javascript
+token.on('TokenURIUpdated', (newURI, timestamp) => {
+	console.log('Metadata updated:', newURI);
+	console.log('At block timestamp:', timestamp);
+
+	// Refresh metadata in your UI
+	fetchAndDisplayMetadata(newURI);
+});
+```
+
+---
+
+### MintingDisabled
+
+Emitted once when minting is permanently disabled (during initialization).
+
+```solidity
+event MintingDisabled(
+    uint256 timestamp
+);
+```
+
+---
+
+## Integration Patterns
+
+### Fetch and Display Token Metadata
+
+```javascript
+async function getTokenMetadata(tokenAddress) {
+	const token = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
+
+	// Get on-chain data
+	const [name, symbol, creator, uri] = await Promise.all([
+		token.name(),
+		token.symbol(),
+		token.creator(),
+		token.tokenURI(),
+	]);
+
+	// Fetch off-chain metadata
+	const ipfsGateway = 'https://ipfs.io/ipfs/';
+	const metadataURL = uri.replace('ipfs://', ipfsGateway);
+
+	const response = await fetch(metadataURL);
+	const metadata = await response.json();
+
+	return {
+		address: tokenAddress,
+		name,
+		symbol,
+		creator,
+		description: metadata.description,
+		image: metadata.image.replace('ipfs://', ipfsGateway),
+		socials: metadata.social_links || {},
+		website: metadata.external_url,
+	};
+}
+```
+
+---
+
+### Build a Token Card Component
+
+```javascript
+async function renderTokenCard(tokenAddress) {
+	const metadata = await getTokenMetadata(tokenAddress);
+
+	return `
+    <div class="token-card">
+      <img src="${metadata.image}" alt="${metadata.name}">
+      <h3>${metadata.name} (${metadata.symbol})</h3>
+      <p>${metadata.description}</p>
+      <div class="creator">
+        Created by: ${metadata.creator.slice(0, 6)}...${metadata.creator.slice(
+		-4
+	)}
+      </div>
+      <div class="socials">
+        ${
+									metadata.socials.twitter
+										? `<a href="${metadata.socials.twitter}">Twitter</a>`
+										: ''
+								}
+        ${
+									metadata.socials.telegram
+										? `<a href="${metadata.socials.telegram}">Telegram</a>`
+										: ''
+								}
+        ${metadata.website ? `<a href="${metadata.website}">Website</a>` : ''}
+      </div>
+      <button onclick="buyToken('${tokenAddress}')">Trade</button>
+    </div>
+  `;
+}
+```
+
+---
+
+### Upload Metadata to IPFS
+
+Here's a quick guide for creators to upload metadata:
+
+<Steps>
+  <Step title="Prepare Your Metadata">
+    Create a JSON file following the structure above. Include all social links and a high-quality image.
+  </Step>
+  
+  <Step title="Upload to IPFS">
+    Use a service like [Pinata](https://pinata.cloud), [NFT.Storage](https://nft.storage), or [Web3.Storage](https://web3.storage):
+    
+    ```javascript
+    // Using Pinata SDK
+    const pinata = new pinataSDK(apiKey, secretKey);
+    
+    // Upload image first
+    const imageUpload = await pinata.pinFileToIPFS(imageFile);
+    const imageURI = `ipfs://${imageUpload.IpfsHash}`;
+    
+    // Create metadata JSON
+    const metadata = {
+      name: "Creator Coin",
+      image: imageURI,
+      description: "...",
+      // ... rest of metadata
+    };
+    
+    // Upload metadata
+    const jsonUpload = await pinata.pinJSONToIPFS(metadata);
+    const metadataURI = `ipfs://${jsonUpload.IpfsHash}`;
+    
+    console.log('Use this URI:', metadataURI);
+    ```
+  </Step>
+  
+  <Step title="Use URI in Token Creation">
+    Pass the `ipfs://...` URI when creating your token via the Factory.
+  </Step>
+</Steps>
+
+<Tip>
+	**Pin Your Content:** Make sure to "pin" your files on IPFS to ensure they
+	remain accessible. Most pinning services offer free tiers for small files.
+</Tip>
+
+---
+
+## Gas Optimization
+
+RektHub uses the **minimal proxy pattern (EIP-1167)** for token deployment:
+
+### How It Works
+
+1. **Implementation Contract**: Deployed once per chain (master copy)
+2. **Clone Creation**: Each new token is a minimal proxy (~100KB of bytecode)
+3. **Delegatecall**: All logic delegated to the implementation
+
+### Gas Savings
+
+| Deployment Method           | Gas Cost           |
+| --------------------------- | ------------------ |
+| **Traditional Deploy**      | ~3,000,000 gas     |
+| **Minimal Proxy (RektHub)** | ~100,000 gas       |
+| **Savings**                 | **~97% reduction** |
+
+This makes token creation affordable on any chain, even mainnet Ethereum.
+
+<Note>
+	**For Integrators:** You don't need to worry about the clone pattern. Interact
+	with token addresses like normal ERC20s, the proxy handles delegation
+	automatically.
+</Note>
+
+---
+
+## Security Considerations
+
+### Supply is Immutable
+
+```solidity
+function mintAndDisableMinting(address to) external onlyFactory {
+    _mintToBondingCurve(to);
+    _disableMinting(); // Permanent lock
+}
+```
+
+Once minting is disabled:
+
+- No one can mint more tokens (not even the creator)
+- Total supply is forever fixed at 1 billion
+- Economic model is predictable and transparent
+
+### Creator Powers
+
+Creators can only:
+
+- Update the `tokenURI` (metadata)
+- Transfer creator role to another address
+
+Creators **cannot**:
+
+- Mint new tokens
+- Burn tokens
+- Pause transfers
+- Control user balances
+- Modify bonding curve parameters
+
+<Info>
+	**Trust Minimization:** Creator powers are intentionally limited. Your tokens
+	are yours, creators can't rug pull or manipulate supply.
+</Info>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Factory Contract'
+		icon='industry'
+		href='/evm/contracts/factory'
+	>
+		Learn how to create tokens
+	</Card>
+	<Card
+		title='Bonding Curve'
+		icon='chart-line'
+		href='/evm/contracts/bonding-curve'
+	>
+		Understand the trading engine
+	</Card>
+	<Card
+		title='Creating Tokens Guide'
+		icon='plus'
+		href='/evm/guides/creating-tokens'
+	>
+		Step-by-step token creation
+	</Card>
+	<Card
+		title='Metadata Standards'
+		icon='image'
+		href='/evm/reference/interfaces'
+	>
+		Deep dive into metadata format
+	</Card>
+</CardGroup>

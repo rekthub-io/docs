@@ -1,0 +1,1050 @@
+---
+title: 'Events Reference'
+description: 'Complete reference for all events emitted by RektHub contracts'
+---
+
+## Overview
+
+RektHub contracts emit detailed events for every significant action. This page is your complete reference for building indexers, dashboards, bots, and real-time UIs.
+
+<Tip>
+	**Pro Tip:** Events are indexed by key parameters (token address, buyer/seller,
+	creator) for efficient querying. Use filters to subscribe to specific tokens or
+	users.
+</Tip>
+
+---
+
+## Factory Events
+
+Events emitted by the **RektHubFactory** contract.
+
+### TokenCreated
+
+Emitted when a new creator token is deployed.
+
+```solidity
+event TokenCreated(
+    address indexed tokenAddress,
+    address indexed curveAddress,
+    address indexed creator,
+    string name,
+    string symbol,
+    string uri,
+    uint256 realNativeReserves,
+    uint256 realTokenReserves,
+    uint256 virtualNativeReserves,
+    uint256 virtualTokenReserves,
+    uint256 creationFee
+);
+```
+
+<ParamField
+	path='tokenAddress'
+	type='address'
+	indexed
+>
+	Address of the deployed token contract
+</ParamField>
+
+<ParamField
+	path='curveAddress'
+	type='address'
+	indexed
+>
+	Address of the bonding curve contract
+</ParamField>
+
+<ParamField
+	path='creator'
+	type='address'
+	indexed
+>
+	Address of the token creator
+</ParamField>
+
+<ParamField
+	path='name'
+	type='string'
+>
+	Token name
+</ParamField>
+
+<ParamField
+	path='symbol'
+	type='string'
+>
+	Token symbol
+</ParamField>
+
+<ParamField
+	path='uri'
+	type='string'
+>
+	Token metadata URI
+</ParamField>
+
+<ParamField
+	path='realNativeReserves'
+	type='uint256'
+>
+	Initial real native reserves (always 0 at creation)
+</ParamField>
+
+<ParamField
+	path='realTokenReserves'
+	type='uint256'
+>
+	Initial real token reserves (850,000,000 tokens)
+</ParamField>
+
+<ParamField
+	path='virtualNativeReserves'
+	type='uint256'
+>
+	Initial virtual native reserves (set by factory)
+</ParamField>
+
+<ParamField
+	path='virtualTokenReserves'
+	type='uint256'
+>
+	Initial virtual token reserves (1,073,000,000 tokens)
+</ParamField>
+
+<ParamField
+	path='creationFee'
+	type='uint256'
+>
+	Fee paid for token creation
+</ParamField>
+
+**Use Cases:**
+
+- Track new token launches in real-time
+- Build "New Tokens" feed
+- Analytics on creator activity
+- Notification systems for followers
+
+**Example:**
+
+```javascript
+factory.on(
+	'TokenCreated',
+	(tokenAddress, curveAddress, creator, name, symbol, uri) => {
+		console.log(`${name} (${symbol}) launched by ${creator}`);
+
+		// Fetch metadata
+		fetchMetadata(uri).then((metadata) => {
+			displayNewToken({
+				address: tokenAddress,
+				name,
+				symbol,
+				creator,
+				image: metadata.image,
+				socials: metadata.social_links,
+			});
+		});
+	}
+);
+```
+
+---
+
+### TokenPurchased
+
+Emitted when tokens are bought through the factory router.
+
+```solidity
+event TokenPurchased(
+    address indexed token,
+    address indexed curve,
+    address indexed buyer,
+    uint256 nativeIn,
+    uint256 tokensOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+<ParamField
+	path='token'
+	type='address'
+	indexed
+>
+	Token address that was purchased
+</ParamField>
+
+<ParamField
+	path='curve'
+	type='address'
+	indexed
+>
+	Bonding curve address
+</ParamField>
+
+<ParamField
+	path='buyer'
+	type='address'
+	indexed
+>
+	Address of the buyer
+</ParamField>
+
+<ParamField
+	path='nativeIn'
+	type='uint256'
+>
+	Amount of native tokens spent (including fees)
+</ParamField>
+
+<ParamField
+	path='tokensOut'
+	type='uint256'
+>
+	Amount of tokens received
+</ParamField>
+
+<ParamField
+	path='totalFee'
+	type='uint256'
+>
+	Total fee charged (1% of nativeIn)
+</ParamField>
+
+<ParamField
+	path='creatorFee'
+	type='uint256'
+>
+	Creator's portion of fee (30% of totalFee)
+</ParamField>
+
+<ParamField
+	path='platformFee'
+	type='uint256'
+>
+	Platform's portion of fee (70% of totalFee)
+</ParamField>
+
+<ParamField
+	path='newRealNativeReserves'
+	type='uint256'
+>
+	Real native reserves after purchase
+</ParamField>
+
+<ParamField
+	path='newRealTokenReserves'
+	type='uint256'
+>
+	Real token reserves after purchase
+</ParamField>
+
+<ParamField
+	path='newVirtualNativeReserves'
+	type='uint256'
+>
+	Virtual native reserves after purchase
+</ParamField>
+
+<ParamField
+	path='newVirtualTokenReserves'
+	type='uint256'
+>
+	Virtual token reserves after purchase
+</ParamField>
+
+**Use Cases:**
+
+- Real-time trade feeds
+- Price chart updates (calculate price from reserves)
+- Volume tracking
+- Creator earnings dashboards
+- Whale watching (large buys)
+
+**Example:**
+
+```javascript
+// Listen for buys on a specific token
+const filter = factory.filters.TokenPurchased(tokenAddress);
+
+factory.on(
+	filter,
+	(
+		token,
+		curve,
+		buyer,
+		nativeIn,
+		tokensOut,
+		totalFee,
+		creatorFee,
+		platformFee,
+		newRealNativeReserves,
+		newRealTokenReserves
+	) => {
+		const price = nativeIn / tokensOut;
+		const newPrice =
+			newRealNativeReserves / (850_000_000n * 10n ** 18n - newRealTokenReserves);
+		const priceImpact = ((newPrice - price) / price) * 100;
+
+		console.log(`   Buy: ${ethers.formatEther(tokensOut)} tokens`);
+		console.log(`   Spent: ${ethers.formatEther(nativeIn)}`);
+		console.log(`   Price impact: ${priceImpact.toFixed(2)}%`);
+		console.log(`   Creator earned: ${ethers.formatEther(creatorFee)}`);
+
+		// Update UI
+		updatePriceChart(newPrice);
+		updateVolume(nativeIn);
+		updateCreatorEarnings(creatorFee);
+	}
+);
+```
+
+---
+
+### TokenSold
+
+Emitted when tokens are sold through the factory router.
+
+```solidity
+event TokenSold(
+    address indexed token,
+    address indexed curve,
+    address indexed seller,
+    uint256 tokensIn,
+    uint256 nativeOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+<ParamField
+	path='token'
+	type='address'
+	indexed
+>
+	Token address that was sold
+</ParamField>
+
+<ParamField
+	path='curve'
+	type='address'
+	indexed
+>
+	Bonding curve address
+</ParamField>
+
+<ParamField
+	path='seller'
+	type='address'
+	indexed
+>
+	Address of the seller
+</ParamField>
+
+<ParamField
+	path='tokensIn'
+	type='uint256'
+>
+	Amount of tokens sold
+</ParamField>
+
+<ParamField
+	path='nativeOut'
+	type='uint256'
+>
+	Amount of native tokens received (after fees)
+</ParamField>
+
+<ParamField
+	path='totalFee'
+	type='uint256'
+>
+	Total fee charged (1% of gross native out)
+</ParamField>
+
+<ParamField
+	path='creatorFee'
+	type='uint256'
+>
+	Creator's portion of fee (30% of totalFee)
+</ParamField>
+
+<ParamField
+	path='platformFee'
+	type='uint256'
+>
+	Platform's portion of fee (70% of totalFee)
+</ParamField>
+
+<ParamField
+	path='newRealNativeReserves'
+	type='uint256'
+>
+	Real native reserves after sale
+</ParamField>
+
+<ParamField
+	path='newRealTokenReserves'
+	type='uint256'
+>
+	Real token reserves after sale
+</ParamField>
+
+<ParamField
+	path='newVirtualNativeReserves'
+	type='uint256'
+>
+	Virtual native reserves after sale
+</ParamField>
+
+<ParamField
+	path='newVirtualTokenReserves'
+	type='uint256'
+>
+	Virtual token reserves after sale
+</ParamField>
+
+**Use Cases:**
+
+- Track selling pressure
+- Identify panic sells or whale exits
+- Update price charts (sells move price down)
+- Creator earnings tracking
+
+**Example:**
+
+```javascript
+factory.on(
+	'TokenSold',
+	(token, curve, seller, tokensIn, nativeOut, totalFee, creatorFee) => {
+		console.log(`   Sell: ${ethers.formatEther(tokensIn)} tokens`);
+		console.log(`   Received: ${ethers.formatEther(nativeOut)}`);
+		console.log(`   Creator still earned: ${ethers.formatEther(creatorFee)}`);
+
+		// Check if it's a whale sell (>1% of supply)
+		const sellSize = tokensIn / (850_000_000n * 10n ** 18n);
+		if (sellSize > 0.01) {
+			notifyWhaleActivity('sell', seller, tokensIn);
+		}
+	}
+);
+```
+
+---
+
+### TokenMigrated
+
+Emitted when a token graduates to DEX.
+
+```solidity
+event TokenMigrated(
+    address indexed tokenAddress,
+    address indexed curveAddress,
+    address indexed poolAddress,
+    string platformName,
+    uint256 nativeLiquidity,
+    uint256 tokenLiquidity,
+    uint256 migrationFee,
+    uint256 creatorFee,
+    uint256 platformFee
+);
+```
+
+<ParamField
+	path='tokenAddress'
+	type='address'
+	indexed
+>
+	Token that graduated
+</ParamField>
+
+<ParamField
+	path='curveAddress'
+	type='address'
+	indexed
+>
+	Bonding curve that was closed
+</ParamField>
+
+<ParamField
+	path='poolAddress'
+	type='address'
+	indexed
+>
+	Address of created liquidity pool
+</ParamField>
+
+<ParamField
+	path='platformName'
+	type='string'
+>
+	Name of the DEX platform (e.g., "Uniswap V2")
+</ParamField>
+
+<ParamField
+	path='nativeLiquidity'
+	type='uint256'
+>
+	Amount of native tokens added to pool (after 12% migration fee)
+</ParamField>
+
+<ParamField
+	path='tokenLiquidity'
+	type='uint256'
+>
+	Amount of tokens added to pool (~223M if fully bonded)
+</ParamField>
+
+<ParamField
+	path='migrationFee'
+	type='uint256'
+>
+	Total migration fee (12% of native liquidity)
+</ParamField>
+
+<ParamField
+	path='creatorFee'
+	type='uint256'
+>
+	Creator's portion (60% of migrationFee = 7.2% of liquidity)
+</ParamField>
+
+<ParamField
+	path='platformFee'
+	type='uint256'
+>
+	Platform's portion (40% of migrationFee = 4.8% of liquidity)
+</ParamField>
+
+**Use Cases:**
+
+- Graduation announcements
+- Redirect users to DEX for trading
+- Track graduation success rates
+- Creator milestone notifications
+
+**Example:**
+
+```javascript
+factory.on(
+	'TokenMigrated',
+	(
+		tokenAddress,
+		curveAddress,
+		poolAddress,
+		platformName,
+		nativeLiquidity,
+		tokenLiquidity,
+		migrationFee,
+		creatorFee
+	) => {
+		console.log(`   Token graduated to ${platformName}!`);
+		console.log(`   Pool: ${poolAddress}`);
+		console.log(`   Liquidity: ${ethers.formatEther(nativeLiquidity)} native`);
+		console.log(
+			`   Creator earned: ${ethers.formatEther(creatorFee)} from migration`
+		);
+
+		// Notify users and redirect
+		showGraduationModal({
+			token: tokenAddress,
+			dex: platformName,
+			poolUrl: `https://app.uniswap.org/pools/${poolAddress}`,
+		});
+	}
+);
+```
+
+---
+
+### FeesWithdrawn
+
+Emitted when platform owner withdraws accumulated fees.
+
+```solidity
+event FeesWithdrawn(
+    address indexed recipient,
+    uint256 amount
+);
+```
+
+<ParamField
+	path='recipient'
+	type='address'
+	indexed
+>
+	Address receiving the fees (contract owner)
+</ParamField>
+
+<ParamField
+	path='amount'
+	type='uint256'
+>
+	Amount of fees withdrawn
+</ParamField>
+
+**Use Cases:**
+
+- Protocol revenue tracking
+- Transparency dashboards
+
+---
+
+## Bonding Curve Events
+
+Events emitted by individual **BondingCurve** contracts.
+
+### TokenPurchased (Curve)
+
+Identical to Factory's TokenPurchased, but emitted by the curve itself.
+
+```solidity
+event TokenPurchased(
+    address indexed buyer,
+    uint256 nativeIn,
+    uint256 tokensOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+<Note>
+	**Difference from Factory:** No `token` or `curve` parameters since those are
+	implicit (the event is emitted by the curve itself).
+</Note>
+
+**Example:**
+
+```javascript
+// Listen directly to a specific curve
+const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
+
+curve.on('TokenPurchased', (buyer, nativeIn, tokensOut) => {
+	console.log(`Direct buy on curve: ${ethers.formatEther(tokensOut)} tokens`);
+});
+```
+
+---
+
+### TokenSold (Curve)
+
+Identical to Factory's TokenSold, but emitted by the curve.
+
+```solidity
+event TokenSold(
+    address indexed seller,
+    uint256 tokensIn,
+    uint256 nativeOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+---
+
+### TokenBonded
+
+Emitted when all tradeable tokens are sold and curve enters "bonded" state.
+
+```solidity
+event TokenBonded(
+    address indexed tokenAddress
+);
+```
+
+<ParamField
+	path='tokenAddress'
+	type='address'
+	indexed
+>
+	Token that reached full bonding
+</ParamField>
+
+**Use Cases:**
+
+- Notify users that token is ready for graduation
+- Trigger graduation countdown/voting UI
+- Creator milestone notification
+
+**Example:**
+
+```javascript
+curve.on('TokenBonded', (tokenAddress) => {
+	console.log(`Token ${tokenAddress} fully bonded!`);
+
+	// Show celebration UI
+	showBondedCelebration();
+
+	// Notify creator
+	notifyCreator('Your token is fully bonded and ready for graduation!');
+
+	// Start graduation countdown
+	startGraduationCountdown();
+});
+```
+
+<Tip>
+	**Critical Event:** TokenBonded marks a major milestone. All tokens sold,
+	maximum liquidity reached, ready for DEX migration.
+</Tip>
+
+---
+
+### TokenMigrated (Curve)
+
+Identical to Factory's TokenMigrated, but emitted by the curve.
+
+```solidity
+event TokenMigrated(
+    address indexed tokenAddress,
+    address indexed poolAddress,
+    string platformName,
+    uint256 nativeLiquidity,
+    uint256 tokenLiquidity,
+    uint256 migrationFee,
+    uint256 creatorFee,
+    uint256 platformFee
+);
+```
+
+---
+
+### CreatorFeesClaimed
+
+Emitted when creator claims accumulated fees.
+
+```solidity
+event CreatorFeesClaimed(
+    address indexed creator,
+    address indexed tokenAddress,
+    uint256 amount
+);
+```
+
+<ParamField
+	path='creator'
+	type='address'
+	indexed
+>
+	Creator claiming fees
+</ParamField>
+
+<ParamField
+	path='tokenAddress'
+	type='address'
+	indexed
+>
+	Token the fees are from
+</ParamField>
+
+<ParamField
+	path='amount'
+	type='uint256'
+>
+	Amount of fees claimed
+</ParamField>
+
+**Use Cases:**
+
+- Track creator earnings withdrawals
+- Creator analytics dashboards
+- Tax reporting tools
+
+**Example:**
+
+```javascript
+curve.on('CreatorFeesClaimed', (creator, tokenAddress, amount) => {
+	console.log(`Creator ${creator} claimed ${ethers.formatEther(amount)}`);
+
+	// Update creator dashboard
+	updateCreatorBalance(creator, amount);
+});
+```
+
+---
+
+### CreatorTransferred
+
+Emitted when creator role is transferred to a new address.
+
+```solidity
+event CreatorTransferred(
+    address indexed oldCreator,
+    address indexed newCreator
+);
+```
+
+<ParamField
+	path='oldCreator'
+	type='address'
+	indexed
+>
+	Previous creator address
+</ParamField>
+
+<ParamField
+	path='newCreator'
+	type='address'
+	indexed
+>
+	New creator address
+</ParamField>
+
+**Use Cases:**
+
+- Track ownership changes
+- Security monitoring
+- Creator account recovery tracking
+
+---
+
+## Token Events
+
+Events emitted by **RektHubToken** contracts.
+
+### TokenURIUpdated
+
+Emitted when creator updates token metadata.
+
+```solidity
+event TokenURIUpdated(
+    string newURI,
+    uint256 timestamp
+);
+```
+
+<ParamField
+	path='newURI'
+	type='string'
+>
+	New metadata URI
+</ParamField>
+
+<ParamField
+	path='timestamp'
+	type='uint256'
+>
+	Block timestamp of update
+</ParamField>
+
+**Use Cases:**
+
+- Refresh token metadata in UIs
+- Track metadata update history
+- Cache invalidation
+
+**Example:**
+
+```javascript
+token.on('TokenURIUpdated', async (newURI, timestamp) => {
+	console.log('Metadata updated:', newURI);
+
+	// Fetch new metadata
+	const metadata = await fetchMetadata(newURI);
+
+	// Update UI
+	updateTokenCard({
+		image: metadata.image,
+		description: metadata.description,
+		socials: metadata.social_links,
+	});
+
+	// Invalidate cache
+	cache.delete(`metadata:${tokenAddress}`);
+});
+```
+
+---
+
+### MintingDisabled
+
+Emitted once during token initialization when minting is permanently locked.
+
+```solidity
+event MintingDisabled(
+    uint256 timestamp
+);
+```
+
+<ParamField
+	path='timestamp'
+	type='uint256'
+>
+	Block timestamp when minting was disabled
+</ParamField>
+
+**Use Cases:**
+
+- Verify supply is locked
+- Security auditing
+- Transparency dashboards
+
+---
+
+## Standard ERC20 Events
+
+All RektHub tokens also emit standard ERC20 events:
+
+### Transfer
+
+```solidity
+event Transfer(
+    address indexed from,
+    address indexed to,
+    uint256 value
+);
+```
+
+### Approval
+
+```solidity
+event Approval(
+    address indexed owner,
+    address indexed spender,
+    uint256 value
+);
+```
+
+---
+
+## Event Filtering Examples
+
+### Listen to All Activity for a Token
+
+```javascript
+const tokenAddress = '0x...';
+
+// Factory events
+const buyFilter = factory.filters.TokenPurchased(tokenAddress);
+const sellFilter = factory.filters.TokenSold(tokenAddress);
+const migrateFilter = factory.filters.TokenMigrated(tokenAddress);
+
+factory.on(buyFilter, handleBuy);
+factory.on(sellFilter, handleSell);
+factory.on(migrateFilter, handleMigration);
+```
+
+### Listen to a Specific User's Activity
+
+```javascript
+const userAddress = '0x...';
+
+// Buys by this user
+factory.on(
+	factory.filters.TokenPurchased(null, null, userAddress),
+	handleUserBuy
+);
+
+// Sells by this user
+factory.on(factory.filters.TokenSold(null, null, userAddress), handleUserSell);
+```
+
+### Query Historical Events
+
+```javascript
+// Get all tokens created in the last 1000 blocks
+const currentBlock = await provider.getBlockNumber();
+const fromBlock = currentBlock - 1000;
+
+const events = await factory.queryFilter(
+	factory.filters.TokenCreated(),
+	fromBlock,
+	'latest'
+);
+
+events.forEach((event) => {
+	console.log('Token:', event.args.name);
+	console.log('Creator:', event.args.creator);
+	console.log('Block:', event.blockNumber);
+});
+```
+
+### Build a Trade Feed
+
+```javascript
+async function buildTradeFeed() {
+	const feed = [];
+
+	factory.on('TokenPurchased', (token, curve, buyer, nativeIn, tokensOut) => {
+		feed.push({
+			type: 'buy',
+			token,
+			user: buyer,
+			amount: ethers.formatEther(tokensOut),
+			value: ethers.formatEther(nativeIn),
+			timestamp: Date.now(),
+		});
+
+		renderFeed(feed);
+	});
+
+	factory.on('TokenSold', (token, curve, seller, tokensIn, nativeOut) => {
+		feed.push({
+			type: 'sell',
+			token,
+			user: seller,
+			amount: ethers.formatEther(tokensIn),
+			value: ethers.formatEther(nativeOut),
+			timestamp: Date.now(),
+		});
+
+		renderFeed(feed);
+	});
+}
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Quick Start'
+		icon='rocket'
+		href='/evm/quickstart'
+	>
+		Start integrating with code examples
+	</Card>
+	<Card
+		title='Factory Contract'
+		icon='industry'
+		href='/evm/contracts/factory'
+	>
+		Learn about the orchestrator
+	</Card>
+	<Card
+		title='Interfaces'
+		icon='code'
+		href='/evm/reference/interfaces'
+	>
+		Contract interfaces and ABIs
+	</Card>
+	<Card
+		title='Libraries'
+		icon='book'
+		href='/evm/reference/libraries'
+	>
+		Bonding curve math utilities
+	</Card>
+</CardGroup>

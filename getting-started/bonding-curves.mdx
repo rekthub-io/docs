@@ -1,0 +1,618 @@
+---
+title: 'Bonding Curves Explained'
+description: 'Deep dive into the mechanics that power fair token launches'
+icon: 'chart-area'
+---
+
+## What Are Bonding Curves?
+
+A bonding curve is an automated market maker (AMM) that determines token price based on supply. As more tokens are bought, the price increases along a mathematical curve. As tokens are sold back, the price decreases.
+
+Think of it like this:
+
+- **First buyer** gets the cheapest price
+- **Last buyer** before graduation pays the highest price
+- **Everyone in between** pays fair market price based on current supply
+
+<Tip>
+	The curve doesn't care who you are, everyone pays the same price at the same
+	supply level.
+</Tip>
+
+---
+
+## Why Bonding Curves?
+
+### Fair Launch
+
+No pre-sales, no insider allocations. The curve doesn't care who you are, everyone pays the same price at the same supply level.
+
+```javascript
+// At launch
+creatorBalance = 0;
+teamBalance = 0;
+insiderBalance = 0;
+
+// Everyone buys from the curve
+```
+
+### Automatic Liquidity
+
+The curve itself is the market maker. No need to seed liquidity pools or wait for market makers. Trading starts instantly.
+
+<CardGroup cols={2}>
+	<Card
+		title='Immediate Trading'
+		icon='bolt'
+	>
+		Buy and sell from day one
+	</Card>
+	<Card
+		title='Always Liquid'
+		icon='water'
+	>
+		Curve always provides liquidity
+	</Card>
+	<Card
+		title='No Rug Risk'
+		icon='shield-check'
+	>
+		Liquidity locked in the curve
+	</Card>
+	<Card
+		title='Fair Pricing'
+		icon='scale-balanced'
+	>
+		Math determines price, not humans
+	</Card>
+</CardGroup>
+
+### Price Discovery
+
+Price finds its natural level based on demand. High demand -> price rises. Low demand -> price stabilizes or falls.
+
+### No Rug Risk
+
+Liquidity is locked in the curve until graduation. Creators can't pull funds. The only way out is through trading or graduation.
+
+---
+
+## RektHub's Bonding Curve Design
+
+### The Numbers
+
+When you launch a token on RektHub:
+
+<Steps>
+	<Step title='Total Supply: 1 Billion Tokens'>
+		Fixed supply, no inflation, no additional minting
+	</Step>
+	<Step title='Tradeable Supply: 850 Million'>
+		Available on the bonding curve for trading
+	</Step>
+	<Step title='Reserved Supply: 150 Million'>
+		Held for DEX graduation (creates liquidity pump)
+	</Step>
+	<Step title='Virtual Token Reserves: 1.073 Billion'>
+		Used for pricing calculations (smooth early prices)
+	</Step>
+	<Step title='Virtual Native Reserves: Varies by Chain'>
+		Calibrated for similar starting prices across all chains
+	</Step>
+</Steps>
+
+<CodeGroup>
+
+```solidity Token Distribution
+// Total supply
+TOTAL_SUPPLY = 1,000,000,000 * 10^18
+
+// Real reserves (actual tokens)
+REAL_TOKEN_RESERVES = 850,000,000 * 10^18  // Tradeable
+RESERVED_FOR_DEX = 150,000,000 * 10^18     // Graduation
+
+// Virtual reserves (pricing)
+VIRTUAL_TOKEN_RESERVES = 1,073,000,000 * 10^18
+VIRTUAL_NATIVE_RESERVES = varies  // ~30 ETH equivalent
+```
+
+```javascript Launch State
+{
+  totalSupply: "1000000000",
+  onCurve: "850000000",        // Can be bought
+  reserved: "150000000",        // For DEX graduation
+  virtualTokens: "1073000000",  // Pricing calculation
+  virtualNative: "30",          // Example for ETH chain
+  realNative: "0"               // Grows as people buy
+}
+```
+
+</CodeGroup>
+
+---
+
+## Virtual vs Real Reserves
+
+Understanding the difference between virtual and real reserves is key to understanding bonding curves.
+
+<Tabs>
+	<Tab title='Real Reserves'>
+		**Real reserves** are actual tokens and native currency in the curve contract.
+		These are what traders receive.
+		
+		```javascript
+		// At launch
+		realNativeReserves = 0 ETH
+		realTokenReserves = 850,000,000 tokens
+		
+		// After first buy (0.1 ETH spent)
+		realNativeReserves = 0.099 ETH  // (0.1 - 1% fee)
+		realTokenReserves = 846,521,342 tokens  // Some sold
+		```
+	</Tab>
+
+    <Tab title='Virtual Reserves'>
+    	**Virtual reserves** are larger numbers used for price calculations. They
+    	create smoother, more stable pricing especially at launch.
+
+    	```javascript
+    	// At launch
+    	virtualNativeReserves = 30 ETH
+    	virtualTokenReserves = 1,073,000,000 tokens
+
+    	// After first buy
+    	virtualNativeReserves = 30.099 ETH
+    	virtualTokenReserves = 1,038,000,000 tokens
+    	```
+    </Tab>
+
+    <Tab title='Why Virtual Reserves Matter'>
+    	Without virtual reserves, early trades cause massive price swings:
+
+    	**Without virtuals (broken):**
+    	```
+    	First buyer: 0.1 ETH → Gets 500M tokens
+    	Second buyer: 0.1 ETH → Gets 10M tokens (50x worse!)
+    	```
+
+    	**With virtuals (smooth):**
+    	```
+    	First buyer: 0.1 ETH → Gets 35M tokens
+    	Second buyer: 0.1 ETH → Gets 33M tokens (stable)
+    	```
+
+    	Virtual reserves ensure fair pricing from day one.
+    </Tab>
+
+</Tabs>
+
+---
+
+## The Constant Product Formula
+
+RektHub uses the time-tested constant product formula from Uniswap:
+
+```
+x × y = k
+```
+
+Where:
+
+- **x** = virtual native reserves
+- **y** = virtual token reserves
+- **k** = constant (product of x and y)
+
+<Accordion title="How buying works">
+When you buy tokens:
+
+1. Native goes in → x increases
+2. Tokens come out → y decreases
+3. k stays constant (maintains the curve)
+
+```javascript
+// Before buy
+x = 30 ETH
+y = 1,073,000,000 tokens
+k = 30 × 1,073,000,000 = 32,190,000,000
+
+// User spends 1 ETH (after fees: 0.99 ETH)
+newX = 30 + 0.99 = 30.99 ETH
+
+// Calculate new y to maintain k
+newY = k / newX = 32,190,000,000 / 30.99 = 1,038,722,168 tokens
+
+// Tokens out
+tokensOut = y - newY = 34,277,832 tokens
+```
+
+</Accordion>
+
+<Accordion title="How selling works">
+When you sell tokens:
+
+1. Tokens go in → y increases
+2. Native comes out → x decreases
+3. k stays constant
+
+```javascript
+// User sells 10,000,000 tokens
+newY = 1,073,000,000 + 10,000,000 = 1,083,000,000
+
+// Calculate new x
+newX = k / newY = 32,190,000,000 / 1,083,000,000 = 29.722 ETH
+
+// Native out (before fees)
+nativeOut = x - newX = 0.278 ETH
+```
+
+</Accordion>
+
+---
+
+## Price Discovery Example
+
+Let's trace how price evolves as a token gains traction:
+
+<Steps>
+	<Step title='Launch (0 ETH traded in)'>
+		```
+		Virtual native: 30 ETH
+		Virtual tokens: 1,073,000,000
+		Price per token: 0.00000002796 ETH
+		Market cap: ~28 ETH
+		```
+	</Step>
+
+    <Step title='Early Stage (10 ETH traded in)'>
+    	```
+    	Virtual native: 40 ETH
+    	Virtual tokens: ~804,750,000
+    	Price per token: 0.00000004970 ETH (1.78x)
+    	Market cap: ~49.7 ETH
+    	```
+    </Step>
+
+    <Step title='Growing (100 ETH traded in)'>
+    	```
+    	Virtual native: 130 ETH
+    	Virtual tokens: ~247,615,385
+    	Price per token: 0.000000525 ETH (18.8x)
+    	Market cap: ~525 ETH
+    	```
+    </Step>
+
+    <Step title='Bonding (850M tokens sold)'>
+    	```
+    	Virtual native: ~530 ETH
+    	Virtual tokens: ~223,000,000
+    	Price per token: 0.00000238 ETH (85x from launch)
+    	Market cap: ~2,380 ETH
+    	```
+    </Step>
+
+</Steps>
+
+<Frame caption='Price progression visualization'>
+	<img
+		src='/images/price-discovery-chart.png'
+		alt='Price discovery over time'
+	/>
+</Frame>
+
+<Info>
+	**These are examples.** Actual prices depend on trading volume and demand. The
+	curve ensures fair pricing at every stage.
+</Info>
+
+---
+
+## The Trading Lifecycle
+
+### Phase 1: Active Trading
+
+Your token launches with 850M tokens available on the curve. Anyone can buy or sell. Price moves up with buys, down with sells.
+
+<Tabs>
+	<Tab title='Buy Transaction'>
+		```javascript
+		// User spends 1 ETH
+		1. Calculate fee: 1 ETH × 1% = 0.01 ETH
+		2. Net amount: 1 - 0.01 = 0.99 ETH
+		3. Calculate tokens from curve: ~34M tokens
+		4. Transfer tokens to buyer
+		5. Update reserves
+		
+		// Reserves after
+		realNativeReserves += 0.99 ETH
+		realTokenReserves -= 34M
+		virtualNativeReserves += 0.99 ETH
+		virtualTokenReserves -= 34M
+		```
+	</Tab>
+
+    <Tab title='Sell Transaction'>
+    	```javascript
+    	// User sells 10M tokens
+    	1. Calculate native out: ~0.278 ETH
+    	2. Calculate fee: 0.278 × 1% = 0.00278 ETH
+    	3. Net to user: 0.278 - 0.00278 = 0.275 ETH
+    	4. Transfer native to seller
+    	5. Update reserves
+
+    	// Reserves after
+    	realNativeReserves -= 0.278 ETH
+    	realTokenReserves += 10M
+    	virtualNativeReserves -= 0.278 ETH
+    	virtualTokenReserves += 10M
+    	```
+    </Tab>
+
+</Tabs>
+
+**Real reserves grow:** Every buy adds native currency. Real token reserves decrease as tokens are sold.
+
+**Virtual reserves adjust:** Track alongside real reserves to maintain pricing formula.
+
+### Phase 2: Bonding Achieved
+
+When **850 million real tokens are sold**, your token is **bonded**. This means:
+
+<CardGroup cols={2}>
+	<Card
+		title='All Supply Sold'
+		icon='check'
+	>
+		All tradeable tokens have been purchased
+	</Card>
+	<Card
+		title='Substantial Liquidity'
+		icon='coins'
+	>
+		Curve has accumulated significant native currency
+	</Card>
+	<Card
+		title='Ready for Graduation'
+		icon='graduation-cap'
+	>
+		Token can now migrate to a DEX
+	</Card>
+	<Card
+		title='Trading Stops'
+		icon='ban'
+	>
+		No more buys/sells on the curve
+	</Card>
+</CardGroup>
+
+```javascript
+// Example bonding state
+{
+  realTokenReserves: 0,              // All 850M sold
+  realNativeReserves: 500 ETH,       // Accumulated liquidity
+  reservedTokens: 150M,              // Ready for DEX
+  status: "bonded",
+  readyForGraduation: true
+}
+```
+
+<Warning>
+	**You cannot trade after bonding.** The token must graduate to a DEX to become
+	tradeable again.
+</Warning>
+
+### Phase 3: Graduation to DEX
+
+The creator triggers graduation. The remaining 150M tokens and accumulated native liquidity migrate to the chosen DEX.
+
+<Steps>
+	<Step title='Migration Fee Charged'>
+		12% of liquidity (e.g., 60 ETH from 500 ETH)
+	</Step>
+	<Step title='Liquidity Sent to DEX'>
+		440 ETH + 150M tokens create LP position
+	</Step>
+	<Step title='LP Tokens Locked/Burned'>No rug pull risk</Step>
+	<Step title='Trading Opens on DEX'>
+		Token now tradeable on Uniswap/PancakeSwap/etc.
+	</Step>
+</Steps>
+
+**The price bump:** When 150M tokens hit the DEX against 440 ETH, there's immediate buying pressure. Early curve buyers often see **5-10x gains**.
+
+<Accordion title="Why the graduation pump?">
+Multiple factors create upward price pressure:
+
+1. **New supply unlocked:** 150M tokens suddenly available
+2. **Deep liquidity:** 440 ETH creates confidence
+3. **FOMO effect:** "I missed the curve, buying on DEX"
+4. **No sell pressure:** Curve sellers are done, only DEX buyers remain
+5. **Price discovery:** New trading venue, new price action
+
+This rewards early believers who bought on the curve at low prices.
+
+</Accordion>
+
+---
+
+## Technical Deep Dive
+
+### Constants
+
+```solidity
+// Token economics
+uint256 public constant TOTAL_SUPPLY = 1_000_000_000 * 10**18;
+uint256 public constant REAL_TOKEN_RESERVES = 850_000_000 * 10**18;
+uint256 public constant VIRTUAL_TOKEN_RESERVES = 1_073_000_000 * 10**18;
+
+// Fee structure
+uint256 private constant PROTOCOL_FEE_BPS = 100;  // 1%
+uint256 private constant CREATOR_SHARE_BPS = 3000;  // 30% of fee
+uint256 private constant BASIS_POINTS = 10000;
+```
+
+### Buy Calculation
+
+```solidity
+function buy(uint256 nativeIn) returns (uint256 tokensOut) {
+    // 1. Calculate fee
+    uint256 fee = nativeIn * PROTOCOL_FEE_BPS / BASIS_POINTS;
+    uint256 creatorFee = fee * CREATOR_SHARE_BPS / BASIS_POINTS;
+    uint256 platformFee = fee - creatorFee;
+
+    // 2. Net amount for trading
+    uint256 netAmount = nativeIn - fee;
+
+    // 3. Calculate tokens out (constant product)
+    uint256 calculatedTokens = (netAmount * virtualTokenReserves) /
+                                (virtualNativeReserves + netAmount);
+
+    // 4. Take minimum (handles last buyer edge case)
+    tokensOut = calculatedTokens < realTokenReserves
+                ? calculatedTokens
+                : realTokenReserves;
+
+    // 5. Update reserves
+    virtualNativeReserves += netAmount;
+    realNativeReserves += netAmount;
+    virtualTokenReserves -= tokensOut;
+    realTokenReserves -= tokensOut;
+
+    // 6. Accumulate creator fee
+    accumulatedCreatorFees += creatorFee;
+
+    // 7. Send platform fee to factory
+    factory.transfer(platformFee);
+}
+```
+
+### Sell Calculation
+
+```solidity
+function sell(uint256 tokensIn) returns (uint256 nativeOut) {
+    // 1. Calculate gross native out (constant product)
+    uint256 grossNative = (tokensIn * virtualNativeReserves) /
+                          (virtualTokenReserves + tokensIn);
+
+    // 2. Check reserves
+    require(grossNative <= realNativeReserves, "Insufficient reserves");
+
+    // 3. Calculate fee
+    uint256 fee = grossNative * PROTOCOL_FEE_BPS / BASIS_POINTS;
+    uint256 creatorFee = fee * CREATOR_SHARE_BPS / BASIS_POINTS;
+    uint256 platformFee = fee - creatorFee;
+
+    // 4. Net to user
+    nativeOut = grossNative - fee;
+
+    // 5. Update reserves (use GROSS for reserves)
+    virtualTokenReserves += tokensIn;
+    realTokenReserves += tokensIn;
+    virtualNativeReserves -= grossNative;
+    realNativeReserves -= grossNative;
+
+    // 6. Accumulate creator fee
+    accumulatedCreatorFees += creatorFee;
+
+    // 7. Send platform fee to factory
+    factory.transfer(platformFee);
+}
+```
+
+### Slippage Protection
+
+Every trade includes a `minOut` parameter:
+
+```solidity
+// Buy with slippage protection
+require(tokensOut >= minTokensOut, "Slippage exceeded");
+
+// Sell with slippage protection
+require(nativeOut >= minNativeOut, "Slippage exceeded");
+```
+
+<Tip>
+	**Always use slippage protection.** Prices move between quote and
+	execution—protect your users.
+</Tip>
+
+---
+
+## Why This Model Works
+
+<AccordionGroup>
+	<Accordion
+		title='For Creators'
+		icon='paintbrush'
+	>
+		- No upfront capital needed (no liquidity to seed)
+		- Earn from every trade (30% of fees)
+		- Control graduation timing and destination
+		- Massive migration reward (60% of 12% fee)
+	</Accordion>
+
+    <Accordion
+    	title='For Early Buyers'
+    	icon='dollar-sign'
+    >
+    	- Fair price at low supply
+    	- Accumulate before bonding
+    	- Benefit from graduation price bump
+    	- Trade with confidence (liquidity locked)
+    </Accordion>
+
+    <Accordion
+    	title='For Communities'
+    	icon='users'
+    >
+    	- Everyone trades on equal terms
+    	- Price reflects genuine demand
+    	- No rug risk from liquidity pulls
+    	- Clear path to DEX graduation
+    </Accordion>
+
+    <Accordion
+    	title='For The Ecosystem'
+    	icon='globe'
+    >
+    	- Sustainable fee model funds development
+    	- No platform token needed
+    	- Scales to any chain with bonding curve support
+    	- Proven mechanics, no experiments
+    </Accordion>
+
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Fee Structure'
+		icon='coins'
+		href='/getting-started/fee-structure'
+	>
+		See exactly how fees are calculated and distributed
+	</Card>
+	<Card
+		title='Token Migration'
+		icon='graduation-cap'
+		href='/getting-started/migration'
+	>
+		Learn about graduating to DEX
+	</Card>
+	<Card
+		title='Start Building'
+		icon='code'
+		href='/evm/quickstart'
+	>
+		Integrate bonding curves into your app
+	</Card>
+	<Card
+		title='Contract Reference'
+		icon='file-contract'
+		href='/evm/contracts/bonding-curve'
+	>
+		Explore the BondingCurve contract
+	</Card>
+</CardGroup>

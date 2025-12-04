@@ -1,122 +1,94 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
-  "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
-  },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API reference",
-        "groups": [
-          {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
-  }
+	"$schema": "https://mintlify.com/docs.json",
+	"theme": "mint",
+	"name": "RektHub Docs",
+	"colors": {
+		"primary": "#16A34A",
+		"light": "#07C983",
+		"dark": "#15803D"
+	},
+	"favicon": "/favicon.svg",
+	"logo": {
+		"light": "/logo/logo.svg",
+		"dark": "/logo/logo.svg"
+	},
+	"navigation": {
+		"tabs": [
+			{
+				"tab": "Getting Started",
+				"groups": [
+					{
+						"group": "Overview",
+						"pages": ["index", "how-it-works", "key-features"]
+					},
+					{
+						"group": "Core Concepts",
+						"pages": [
+							"getting-started/bonding-curves",
+							"getting-started/fee-structure",
+							"getting-started/migration"
+						]
+					}
+				]
+			},
+			{
+				"tab": "EVM Integration",
+				"groups": [
+					{
+						"group": "Quick Start",
+						"pages": ["evm/quickstart", "evm/deployment-addresses"]
+					},
+					{
+						"group": "Core Contracts",
+						"pages": [
+							"evm/contracts/factory",
+							"evm/contracts/bonding-curve",
+							"evm/contracts/token"
+						]
+					},
+					{
+						"group": "Reference",
+						"pages": ["evm/reference/interfaces", "evm/reference/events"]
+					}
+				]
+			}
+		],
+		"global": {
+			"anchors": [
+				{
+					"anchor": "GitHub",
+					"href": "https://github.com/organizations/RektHub-Ecosystem",
+					"icon": "github"
+				},
+				{
+					"anchor": "Website",
+					"href": "https://rekthub.io",
+					"icon": "globe"
+				}
+			]
+		}
+	},
+	"navbar": {
+		"links": [
+			{
+				"label": "Support",
+				"href": "mailto:rekthub.io@gmail.com"
+			}
+		],
+		"primary": {
+			"type": "button",
+			"label": "Join Waitlist",
+			"href": "https://rekthub.io/#waitlist"
+		}
+	},
+	"contextual": {
+		"options": ["copy", "view", "chatgpt", "claude", "cursor", "vscode"]
+	},
+	"footer": {
+		"socials": {
+			"x": "https://x.com/rekthub_io",
+			"github": "https://github.com/organizations/RektHub-Ecosystem",
+			"telegram": "https://t.me/rekthub_io"
+		}
+	}
 }

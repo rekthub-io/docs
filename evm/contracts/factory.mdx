@@ -1,0 +1,712 @@
+---
+title: 'RektHubFactory'
+description: 'The orchestrator contract for the creator economy'
+---
+
+## Overview
+
+The **RektHubFactory** is the central hub of the RektHub protocol. It's your single entry point for creating creator tokens, trading, and managing the entire token lifecycle. Think of it as the conductor of an orchestra, coordinating token creation, routing trades, and managing graduations across the creator economy.
+
+<Info>
+	**For Integrators:** Always use the Factory as your primary interface. It
+	ensures consistency, proper fee distribution, and seamless cross-contract
+	interactions.
+</Info>
+
+## Purpose & Architecture
+
+### What It Does
+
+- **Token Creation**: Deploys new creator tokens with bonding curves
+- **Trade Routing**: Routes buy/sell orders to the correct bonding curve
+- **Fee Management**: Collects platform fees.
+- **Graduation Control**: Manages token migration to DEX (owner-only)
+- **Address Discovery**: Maps tokens to their bonding curves
+
+### Why It Matters
+
+The Factory pattern provides:
+
+- **Gas Efficiency**: Uses minimal proxies (EIP-1167) to clone implementations
+- **Isolation**: Each token gets its own bonding curve with isolated state
+- **Upgradeability**: New features can be added without affecting existing tokens (**not an upgradeable contract though**)
+- **Single Source of Truth**: All critical operations go through one audited contract
+
+## Key Functions
+
+### Token Creation
+
+#### `createToken`
+
+<ParamField
+	path='name'
+	type='string'
+	required
+>
+	Token name (e.g., "Creator Coin")
+</ParamField>
+
+<ParamField
+	path='symbol'
+	type='string'
+	required
+>
+	Token symbol (e.g., "CRTR")
+</ParamField>
+
+<ParamField
+	path='tokenURI'
+	type='string'
+	required
+>
+	URI pointing to token metadata JSON
+</ParamField>
+
+**Returns:**
+
+- `tokenAddress`: Address of the deployed token
+- `curveAddress`: Address of the bonding curve
+
+**Events Emitted:**
+
+- `TokenCreated`
+
+**Example:**
+
+```solidity
+function createToken(
+    string calldata name,
+    string calldata symbol,
+    string calldata tokenURI
+) external payable returns (address tokenAddress, address curveAddress);
+```
+
+```javascript
+// Create a new creator token
+const tx = await factory.createToken(
+	'Creator Coin',
+	'CRTR',
+	'ipfs://Qm...', // Your metadata JSON
+	{ value: creationFee } // Pay creation fee
+);
+
+const receipt = await tx.wait();
+
+// Parse event to get addresses
+const event = receipt.logs
+	.map((log) => factory.interface.parseLog(log))
+	.find((e) => e?.name === 'TokenCreated');
+
+console.log('Token address:', event.args.tokenAddress);
+console.log('Curve address:', event.args.curveAddress);
+```
+
+<Tip>
+	**Metadata Best Practices:** Host your tokenURI on IPFS or Arweave for
+	permanence. Include name, description, image, and social links. See [Token
+	Contract](/evm/contracts/token#metadata-structure) for JSON format.
+</Tip>
+
+---
+
+#### `createTokenDeterministic`
+
+Create a token with a **vanity address** using CREATE2.
+
+<ParamField
+	path='name'
+	type='string'
+	required
+>
+	Token name
+</ParamField>
+
+<ParamField
+	path='symbol'
+	type='string'
+	required
+>
+	Token symbol
+</ParamField>
+
+<ParamField
+	path='tokenURI'
+	type='string'
+	required
+>
+	Metadata URI
+</ParamField>
+
+<ParamField
+	path='salt'
+	type='bytes32'
+	required
+>
+	CREATE2 salt (pre-mined for vanity address)
+</ParamField>
+
+**Returns:**
+
+- `tokenAddress`: Deterministic token address
+- `curveAddress`: Deterministic curve address
+
+**Events Emitted:**
+
+- `TokenCreated`
+
+**Example:**
+
+```javascript
+// First, predict the address offchain
+const salt = ethers.id('my-vanity-salt'); // Or pre-mine for specific prefix
+
+const [predictedToken, predictedCurve] = await factory.predictAddresses(salt);
+console.log('Will create token at:', predictedToken);
+
+// Check if address is available
+const code = await provider.getCode(predictedToken);
+if (code !== '0x') {
+	throw new Error('Address already occupied!');
+}
+
+// Create with deterministic address
+const tx = await factory.createTokenDeterministic(
+	'Vanity Token',
+	'VNTY',
+	'ipfs://Qm...',
+	salt,
+	{ value: creationFee }
+);
+```
+
+<Warning>
+	**Address Collision:** Always check if the predicted address is available
+	before calling `createTokenDeterministic`. The transaction will revert if the
+	address is occupied.
+</Warning>
+
+---
+
+#### `predictAddresses`
+
+Preview the addresses that will be created with a given salt.
+
+<ParamField
+	path='salt'
+	type='bytes32'
+	required
+>
+	CREATE2 salt
+</ParamField>
+
+**Returns:**
+
+- `predictedToken`: Token address that will be created
+- `predictedCurve`: Curve address that will be created
+
+**Example:**
+
+```javascript
+const salt = ethers.id('test-salt');
+const [tokenAddr, curveAddr] = await factory.predictAddresses(salt);
+
+console.log('Future token address:', tokenAddr);
+console.log('Future curve address:', curveAddr);
+```
+
+---
+
+### Trading Functions
+
+#### `buy`
+
+Purchase creator tokens from any deployed curve.
+
+<ParamField
+	path='token'
+	type='address'
+	required
+>
+	Address of the token to buy
+</ParamField>
+
+<ParamField
+	path='minTokensOut'
+	type='uint256'
+	required
+>
+	Minimum tokens expected (slippage protection)
+</ParamField>
+
+**Returns:**
+
+- `tokensReceived`: Actual amount of tokens received
+
+**Events Emitted:**
+
+- `TokenPurchased`
+
+**Example:**
+
+```javascript
+// Get price quote first
+const curveAddress = await factory.getCurve(tokenAddress);
+const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
+
+const amountToSpend = ethers.parseEther('0.1');
+const [expectedTokens, totalFee] = await curve.getBuyPrice(amountToSpend);
+
+// Apply 5% slippage tolerance
+const minTokensOut = (expectedTokens * 95n) / 100n;
+
+// Execute buy
+const tx = await factory.buy(tokenAddress, minTokensOut, {
+	value: amountToSpend,
+});
+
+const receipt = await tx.wait();
+```
+
+<Tip>
+	**Always get a quote** before buying. Prices move based on bonding curve math,
+	protect users with `minTokensOut`.
+</Tip>
+
+---
+
+#### `sell`
+
+Sell creator tokens back to the bonding curve.
+
+<ParamField
+	path='token'
+	type='address'
+	required
+>
+	Address of the token to sell
+</ParamField>
+
+<ParamField
+	path='tokenAmount'
+	type='uint256'
+	required
+>
+	Amount of tokens to sell
+</ParamField>
+
+<ParamField
+	path='minNativeOut'
+	type='uint256'
+	required
+>
+	Minimum native tokens expected (slippage protection)
+</ParamField>
+
+**Returns:**
+
+- `nativeReceived`: Amount of native tokens received
+
+**Events Emitted:**
+
+- `TokenSold`
+
+**Example:**
+
+```javascript
+// 1. Approve curve to spend tokens
+const curveAddress = await factory.getCurve(tokenAddress);
+const token = new ethers.Contract(tokenAddress, TOKEN_ABI, signer);
+
+const amountToSell = ethers.parseEther('1000');
+await token.approve(curveAddress, amountToSell);
+
+// 2. Get price quote
+const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
+const [expectedNative, totalFee] = await curve.getSellPrice(amountToSell);
+
+// Apply slippage protection
+const minNativeOut = (expectedNative * 95n) / 100n;
+
+// 3. Execute sell
+const tx = await factory.sell(tokenAddress, amountToSell, minNativeOut);
+await tx.wait();
+```
+
+---
+
+#### `sellPercentage`
+
+Sell a percentage of your token balance, perfect for "Sell 25%" buttons on front end.
+
+<ParamField
+	path='token'
+	type='address'
+	required
+>
+	Address of the token to sell
+</ParamField>
+
+<ParamField
+	path='basisPoints'
+	type='uint256'
+	required
+>
+	Percentage in basis points (5000 = 50%, 10000 = 100%)
+</ParamField>
+
+<ParamField
+	path='minNativeOut'
+	type='uint256'
+	required
+>
+	Minimum native tokens expected
+</ParamField>
+
+**Returns:**
+
+- `nativeReceived`: Amount of native tokens received
+
+**Events Emitted:**
+
+- `TokenSold`
+
+**Example:**
+
+```javascript
+// Approve first (approve max for better UX)
+const curveAddress = await factory.getCurve(tokenAddress);
+await token.approve(curveAddress, ethers.MaxUint256);
+
+// Sell 50% of balance (5000 basis points)
+const tx = await factory.sellPercentage(
+	tokenAddress,
+	5000, // 50%
+	minNativeOut
+);
+```
+
+<Tip>
+	**Basis Points:** 100 basis points = 1%. So 2500 = 25%, 5000 = 50%, 10000 =
+	100%.
+</Tip>
+
+---
+
+### Admin Functions
+
+#### `migrate`
+
+Graduate a bonded token to DEX. **Owner-only function.**
+
+<ParamField
+	path='token'
+	type='address'
+	required
+>
+	Address of the token to migrate
+</ParamField>
+
+<ParamField
+	path='migrator'
+	type='address'
+	required
+>
+	Address of the DEX migrator contract
+</ParamField>
+
+**Returns:**
+
+- `poolAddress`: Address of the created liquidity pool
+- `platformName`: Name of the DEX platform
+
+**Events Emitted:**
+
+- `TokenMigrated`
+
+**Requirements:**
+
+- Token must be **bonded** (all 850M tradeable tokens sold)
+- Token must not already be **graduated**
+- Caller must be **contract owner**
+- Migrator must implement `IDEXMigrator` interface
+
+**Example:**
+
+```javascript
+// Only contract owner can call this
+const UNISWAP_MIGRATOR = '0x...'; // Your DEX migrator address
+
+const tx = await factory.migrate(tokenAddress, UNISWAP_MIGRATOR);
+const receipt = await tx.wait();
+
+// Parse event to get pool address
+const event = receipt.logs
+	.map((log) => factory.interface.parseLog(log))
+	.find((e) => e?.name === 'TokenMigrated');
+
+console.log('LP Pool created:', event.args.poolAddress);
+console.log('Platform:', event.args.platformName);
+console.log('Liquidity added:', ethers.formatEther(event.args.nativeLiquidity));
+```
+
+<Note>
+	**For Creators:** You cannot manually trigger migration. Graduation happens
+	when RektHub's automated system detects and calls this function after your
+	token bonds. Track your progress on the front end.
+</Note>
+
+---
+
+#### `withdrawFees`
+
+Withdraw accumulated platform fees. **Owner-only function.**
+
+**Example:**
+
+```javascript
+const balance = await provider.getBalance(factory.address);
+console.log('Withdrawable fees:', ethers.formatEther(balance));
+
+const tx = await factory.withdrawFees();
+await tx.wait();
+```
+
+---
+
+### View Functions
+
+#### `getCurve`
+
+Get the bonding curve address for a token.
+
+<ParamField
+	path='token'
+	type='address'
+	required
+>
+	Token address
+</ParamField>
+
+**Returns:**
+
+- `address`: Bonding curve address
+
+**Example:**
+
+```javascript
+const curveAddress = await factory.getCurve(tokenAddress);
+console.log('Curve for token:', curveAddress);
+
+// Now interact with the curve
+const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
+```
+
+---
+
+#### `getCreationFee`
+
+Get the current token creation fee.
+
+**Returns:**
+
+- `uint256`: Creation fee in native tokens
+
+**Example:**
+
+```javascript
+const fee = await factory.getCreationFee();
+console.log('Creation fee:', ethers.formatEther(fee), 'ETH');
+```
+
+---
+
+## Events
+
+### TokenCreated
+
+Emitted when a new token is deployed.
+
+```solidity
+event TokenCreated(
+    address indexed tokenAddress,
+    address indexed curveAddress,
+    address indexed creator,
+    string name,
+    string symbol,
+    string uri,
+    uint256 realNativeReserves,
+    uint256 realTokenReserves,
+    uint256 virtualNativeReserves,
+    uint256 virtualTokenReserves,
+    uint256 creationFee
+);
+```
+
+**Use Cases:**
+
+- Track new token launches
+- Build trending token feeds
+- Creator analytics dashboards
+
+---
+
+### TokenPurchased
+
+Emitted when tokens are bought through the factory.
+
+```solidity
+event TokenPurchased(
+    address indexed token,
+    address indexed curve,
+    address indexed buyer,
+    uint256 nativeIn,
+    uint256 tokensOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+**Use Cases:**
+
+- Real-time trade feeds
+- Price charts and volume tracking
+- Creator earnings dashboards
+
+---
+
+### TokenSold
+
+Emitted when tokens are sold through the factory.
+
+```solidity
+event TokenSold(
+    address indexed token,
+    address indexed curve,
+    address indexed seller,
+    uint256 tokensIn,
+    uint256 nativeOut,
+    uint256 totalFee,
+    uint256 creatorFee,
+    uint256 platformFee,
+    uint256 newRealNativeReserves,
+    uint256 newRealTokenReserves,
+    uint256 newVirtualNativeReserves,
+    uint256 newVirtualTokenReserves
+);
+```
+
+---
+
+### TokenMigrated
+
+Emitted when a token graduates to DEX.
+
+```solidity
+event TokenMigrated(
+    address indexed tokenAddress,
+    address indexed curveAddress,
+    address indexed poolAddress,
+    string platformName,
+    uint256 nativeLiquidity,
+    uint256 tokenLiquidity,
+    uint256 migrationFee,
+    uint256 creatorFee,
+    uint256 platformFee
+);
+```
+
+---
+
+### FeesWithdrawn
+
+Emitted when platform fees are withdrawn.
+
+```solidity
+event FeesWithdrawn(
+    address indexed recipient,
+    uint256 amount
+);
+```
+
+---
+
+## Integration Tips
+
+### Always Use Factory for Consistency
+
+```javascript
+// ✅ Good: Use factory
+await factory.buy(tokenAddress, minTokensOut, { value: amount });
+
+// ❌ Avoid: Directly calling curve (unless you have a reason)
+await curve.buy(buyer, minTokensOut, { value: amount });
+```
+
+### Handle Events Efficiently
+
+```javascript
+// Listen for specific token trades
+const tokenFilter = factory.filters.TokenPurchased(tokenAddress);
+factory.on(tokenFilter, (token, curve, buyer, nativeIn, tokensOut) => {
+	updateUI({ buyer, nativeIn, tokensOut });
+});
+
+// Or listen to all trades
+factory.on('TokenPurchased', handlePurchase);
+factory.on('TokenSold', handleSale);
+```
+
+### Multi-Chain Setup
+
+```javascript
+const factories = {
+	1: new ethers.Contract(ETHEREUM_FACTORY, ABI, ethProvider),
+	8453: new ethers.Contract(BASE_FACTORY, ABI, baseProvider),
+	42161: new ethers.Contract(ARB_FACTORY, ABI, arbProvider),
+};
+
+async function buyOnChain(chainId, tokenAddress, amount) {
+	const factory = factories[chainId];
+	return factory.buy(tokenAddress, minOut, { value: amount });
+}
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Bonding Curve Contract'
+		icon='chart-line'
+		href='/evm/contracts/bonding-curve'
+	>
+		Learn about the trading engine
+	</Card>
+	<Card
+		title='Token Contract'
+		icon='coins'
+		href='/evm/contracts/token'
+	>
+		Understand creator token standards
+	</Card>
+	<Card
+		title='Buying Guide'
+		icon='cart-shopping'
+		href='/evm/guides/buying-tokens'
+	>
+		Deep dive into buying patterns
+	</Card>
+	<Card
+		title='Events Reference'
+		icon='bell'
+		href='/evm/reference/events'
+	>
+		Complete events documentation
+	</Card>
+</CardGroup>

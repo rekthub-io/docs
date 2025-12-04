@@ -1,97 +1,157 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: 'Introduction'
+description: 'Welcome to RektHub: Creator-token economy hub that unites chains'
 ---
 
-## Setting up
+## What is RektHub?
 
-Get your documentation site up and running in minutes.
+RektHub is a **creator-token economy hub** that eliminates blockchain boundaries. We're not just another token launchpad, we're building infrastructure that empowers creators to build, monetize, and engage with communities across any chain.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Every chain today operates as an isolated island. Ethereum creators can't easily reach Solana users. Base tokens can't tap into Arbitrum liquidity. Communities are fragmented by the chains they're on. **RektHub changes this.**
 
-## Make it yours
+<Frame>
+	<img
+		src='/images/cross-chain-flow.png'
+		alt='Cross-chain token flow'
+	/>
+</Frame>
 
-Design a docs site that looks great and empowers your users.
+## The Vision
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+Imagine launching a token on Base and having someone on Solana buy it with SOL in one click. No wrapped tokens, no friction. Your community united across chains, trading together, growing together. That's RektHub.
 
-## Create beautiful pages
+<CardGroup cols={2}>
+	<Card
+		title='For Creators'
+		icon='paintbrush'
+	>
+		Launch tokens in minutes and earn from every trade (and more)
+	</Card>
+	<Card
+		title='For Communities'
+		icon='users'
+	>
+		Trade from any chain using it's native (e.g ETH for Base, Arbitrum, Ethereum)
+	</Card>
+	<Card
+		title='For Traders'
+		icon='chart-line'
+	>
+		Access opportunities from wherever you are
+	</Card>
+	<Card
+		title='For Developers'
+		icon='code'
+	>
+		Integrate creator-token economy model into your infrastructure/apps
+	</Card>
+</CardGroup>
 
-Everything you need to create world-class documentation.
+## Why RektHub?
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+### For Creators
 
-## Need inspiration?
+Launch your token on any chain, accumulate fees from every buy and sell, and control where your token graduates to. Even better sustainable creator economics (more in future).
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Tip>
+	Creators earn **30% of all trading fees** plus **60% of the migration fee**
+	when their token graduates to a DEX.
+</Tip>
+
+### For Communities
+
+Trade from any chain using the natives of that chain. Built-in **Rekt Community chat** keeps everyone connected. Real-time activity feeds show what's happening. Your community isn't limited by which wallet you have.
+
+### For Integrators
+
+Contract is open source. Build dashboards, aggregators, bots, or full platforms on top of RektHub's infrastructure.
+
+## What Makes Us Different
+
+This isn't another pump-and-dump factory. RektHub uses proven **bonding curve mechanics** with fair launch guarantees. Creators don't get special allocations. Everyone buys from the same curve.
+
+<Info>
+	When **850 million tokens are sold**, your token graduates to a real DEX with
+	deep liquidity automatically.
+</Info>
+
+Beyond tokens, we're building the full creator economy stack: monetization tools, engagement features, and utilities that empower creators without compromising their communities.
+
+<Tip>More features coming soon. We're just getting started.</Tip>
+
+## Get Started
+
+<CardGroup cols={2}>
+	<Card
+		title='Join the waitlist'
+		icon='rocket'
+		href='#waitlist'
+	>
+		Join the waitlist to launch your creator token
+	</Card>
+	<Card
+		title='Start Trading'
+		icon='chart-candlestick'
+		href='#waitlist'
+	>
+		Experience cross-chain trading when we launch
+	</Card>
+	<Card
+		title='Integrate RektHub'
+		icon='plug'
+		href='/evm/quickstart'
+	>
+		Explore our EVM integration docs
+	</Card>
+	<Card
+		title='Join Community'
+		icon='telegram'
+		href='https://t.me/rekthub_io'
+	>
+		Connect with creators and developers
+	</Card>
+</CardGroup>
+
+## Architecture Overview
+
+```mermaid
+graph LR
+    A[Creator] -->|Launches| B[Token on Chain A]
+    C[Trader on Chain B] -->|Buys with native| D[RektHub]
+    D -->|Routes via Khalani| B
+    B -->|Accumulates fees| A
+    B -->|850M sold| E[Graduates to DEX]
+```
+
+## Support & Resources
+
+<CardGroup cols={3}>
+	<Card
+		title='GitHub'
+		icon='github'
+		href='https://github.com/organizations/RektHub-Ecosystem'
+	>
+		View our smart contracts
+	</Card>
+	<Card
+		title='Telegram'
+		icon='telegram'
+		href='https://t.me/rekthub_io'
+	>
+		Join our community
+	</Card>
+	<Card
+		title='X (Twitter)'
+		icon='x-twitter'
+		href='https://x.com/rekthub_io'
+	>
+		Follow for updates
+	</Card>
+</CardGroup>
+
+---
+
+<Note>
+	**Ready to dive deeper?** Continue to [How It Works](/how-it-works) to
+	understand the full ecosystem flow.
+</Note>

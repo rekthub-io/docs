@@ -1,0 +1,578 @@
+---
+description: 'Integrate RektHub into your app and start building the creator economy'
+---
+
+## What You Can Build
+
+RektHub isn't just another "token launchpad", it's infrastructure for the creator economy. Integrate our contracts to build:
+
+- **Trading Interfaces**: Cross-chain token trading UIs
+- **Creator Dashboards**: Fee tracking, analytics, community management
+- **Portfolio Trackers**: Multi-chain creator token portfolios
+- **Trading Bots**: Automated trading strategies
+- **Aggregators**: Cross-platform creator token discovery
+
+<Info>
+	**Building something cool?** Tag us [@rekthub_io](https://x.com/rekthub_io) on
+	X—we love seeing what the community creates.
+</Info>
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- **Node.js** v16+ installed
+- **ethers.js** v6+ or **viem** v1+ (your choice)
+- A **wallet provider** (MetaMask, WalletConnect, etc.)
+- **RPC endpoint** for your target chain
+- Some **native tokens** for gas fees
+
+<Tip>
+	Need testnet tokens? Check our [Deployment
+	Addresses](/evm/deployment-addresses) page for faucet links.
+</Tip>
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install ethers@^6
+```
+
+```bash yarn
+yarn add ethers@^6
+```
+
+```bash pnpm
+pnpm add ethers@^6
+```
+
+</CodeGroup>
+
+## Your First Buy Transaction
+
+Let's buy some creator tokens. This example shows the complete flow:
+
+```javascript
+import { ethers } from 'ethers';
+
+// Contract addresses (see deployment-addresses page)
+const FACTORY_ADDRESS = '0x...'; // RektHub Factory
+const TOKEN_ADDRESS = '0x...';   // Token you want to buy
+
+// Factory ABI (minimal - just what we need)
+const FACTORY_ABI = [
+  'function buy(address token, uint256 minTokensOut) payable returns (uint256)',
+  'function getCurve(address token) view returns (address)',
+  'event TokenPurchased(address indexed token, address indexed curve, address indexed buyer, uint256 nativeIn, uint256 tokensOut, uint256 totalFee, uint256 creatorFee, uint256 platformFee, uint256 newRealNativeReserves, uint256 newRealTokenReserves, uint256 newVirtualNativeReserves, uint256 newVirtualTokenReserves)'
+];
+
+async function buyCreatorToken() {
+  // 1. Connect to provider and signer
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+
+  // 2. Create factory contract instance
+  const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
+
+  // 3. Calculate amount to spend (0.1 native tokens)
+  const amountToSpend = ethers.parseEther('0.1');
+
+  // 4. Get price quote (optional but recommended)
+  const curveAddress = await factory.getCurve(TOKEN_ADDRESS);
+  // ... call getBuyPrice on curve for exact quote
+
+  // 5. Set slippage protection (5% slippage tolerance)
+  const expectedTokens = /* from quote */;
+  const minTokensOut = expectedTokens * 95n / 100n; // 5% slippage
+
+  // 6. Execute buy transaction
+  const tx = await factory.buy(TOKEN_ADDRESS, minTokensOut, {
+    value: amountToSpend
+  });
+
+  console.log('Transaction sent:', tx.hash);
+
+  // 7. Wait for confirmation
+  const receipt = await tx.wait();
+  console.log('Transaction confirmed:', receipt.hash);
+
+  // 8. Parse event to get exact amounts
+  const event = receipt.logs
+    .map(log => {
+      try { return factory.interface.parseLog(log); }
+      catch { return null; }
+    })
+    .find(e => e?.name === 'TokenPurchased');
+
+  if (event) {
+    console.log('Tokens received:', ethers.formatEther(event.args.tokensOut));
+    console.log('Creator earned:', ethers.formatEther(event.args.creatorFee));
+  }
+
+  return receipt;
+}
+```
+
+<Warning>
+	**Always implement slippage protection.** Prices move between quote and
+	execution—use `minTokensOut` to protect users.
+</Warning>
+
+## Your First Sell Transaction
+
+Selling tokens back to the curve:
+
+```javascript
+import { ethers } from 'ethers';
+
+const FACTORY_ADDRESS = '0x...';
+const TOKEN_ADDRESS = '0x...';
+
+const FACTORY_ABI = [
+  'function sell(address token, uint256 tokenAmount, uint256 minNativeOut) returns (uint256)',
+  'event TokenSold(address indexed token, address indexed curve, address indexed seller, uint256 tokensIn, uint256 nativeOut, uint256 totalFee, uint256 creatorFee, uint256 platformFee, uint256 newRealNativeReserves, uint256 newRealTokenReserves, uint256 newVirtualNativeReserves, uint256 newVirtualTokenReserves)'
+];
+
+const TOKEN_ABI = [
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function balanceOf(address account) view returns (uint256)'
+];
+
+async function sellCreatorToken() {
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+
+  const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
+  const token = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+
+  // 1. Get user's token balance
+  const balance = await token.balanceOf(await signer.getAddress());
+  const amountToSell = balance / 2n; // Sell 50%
+
+  // 2. Get curve address
+  const curveAddress = await factory.getCurve(TOKEN_ADDRESS);
+
+  // 3. Approve curve to spend tokens
+  const approveTx = await token.approve(curveAddress, amountToSell);
+  await approveTx.wait();
+  console.log('Approval confirmed');
+
+  // 4. Get price quote for slippage protection
+  // ... call getSellPrice on curve
+  const expectedNative = /* from quote */;
+  const minNativeOut = expectedNative * 95n / 100n; // 5% slippage
+
+  // 5. Execute sell transaction
+  const tx = await factory.sell(TOKEN_ADDRESS, amountToSell, minNativeOut);
+  console.log('Sell transaction sent:', tx.hash);
+
+  const receipt = await tx.wait();
+  console.log('Sell confirmed:', receipt.hash);
+
+  return receipt;
+}
+```
+
+<Tip>
+	**Pro tip:** Use `sellPercentage()` instead to sell a percentage without
+	calculating exact amounts. Perfect for "Sell 25%" buttons.
+</Tip>
+
+## Creating Your First Token
+
+Launch a creator token in minutes. Here's the complete flow from metadata to deployment:
+
+### Step 1: Prepare Your Metadata
+
+Create a JSON file with your token info:
+
+```json
+{
+	"name": "Creator Coin",
+	"symbol": "CRTR",
+	"description": "Official token for [Your Community]. Join us!",
+	"image": "ipfs://QmYourImageHash...",
+	"external_url": "https://your-website.com",
+	"social_links": {
+		"twitter": "https://x.com/yourusername",
+		"telegram": "https://t.me/yourchannel"
+	}
+}
+```
+
+### Step 2: Upload to IPFS
+
+```javascript
+// Using Pinata (or any IPFS service)
+import pinataSDK from '@pinata/sdk';
+
+const pinata = new pinataSDK(
+	process.env.PINATA_API_KEY,
+	process.env.PINATA_SECRET
+);
+
+// Upload metadata JSON
+const upload = await pinata.pinJSONToIPFS(metadata);
+const metadataURI = `ipfs://${upload.IpfsHash}`;
+
+console.log('Metadata URI:', metadataURI);
+```
+
+<Tip>
+	**Free IPFS Services:** [Pinata](https://pinata.cloud),
+	[NFT.Storage](https://nft.storage), or [Web3.Storage](https://web3.storage) all
+	offer free tiers.
+</Tip>
+
+### Step 3: Create the Token
+
+```javascript
+import { ethers } from 'ethers';
+
+const FACTORY_ADDRESS = '0x...';
+const FACTORY_ABI = [
+	'function createToken(string calldata name, string calldata symbol, string calldata tokenURI) payable returns (address, address)',
+	'function getCreationFee() view returns (uint256)',
+	'event TokenCreated(address indexed tokenAddress, address indexed curveAddress, address indexed creator, string name, string symbol, string uri, uint256 realNativeReserves, uint256 realTokenReserves, uint256 virtualNativeReserves, uint256 virtualTokenReserves, uint256 creationFee)',
+];
+
+async function createCreatorToken() {
+	const provider = new ethers.BrowserProvider(window.ethereum);
+	const signer = await provider.getSigner();
+
+	const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
+
+	// 1. Get creation fee
+	const creationFee = await factory.getCreationFee();
+	console.log('Creation fee:', ethers.formatEther(creationFee), 'ETH');
+
+	// 2. Create token
+	const tx = await factory.createToken(
+		'Creator Coin', // name
+		'CRTR', // symbol
+		'ipfs://QmYourHash...', // tokenURI from step 2
+		{ value: creationFee }
+	);
+
+	console.log('Transaction sent:', tx.hash);
+	const receipt = await tx.wait();
+
+	// 3. Get token addresses from event
+	const event = receipt.logs
+		.map((log) => {
+			try {
+				return factory.interface.parseLog(log);
+			} catch {
+				return null;
+			}
+		})
+		.find((e) => e?.name === 'TokenCreated');
+
+	console.log('✅ Token created!');
+	console.log('Token address:', event.args.tokenAddress);
+	console.log('Curve address:', event.args.curveAddress);
+	console.log(
+		'View on explorer:',
+		`https://etherscan.io/token/${event.args.tokenAddress}`
+	);
+
+	return {
+		token: event.args.tokenAddress,
+		curve: event.args.curveAddress,
+	};
+}
+```
+
+### Step 4: Verify on Block Explorer
+
+After creation, verify your token shows up correctly:
+
+```javascript
+// Check token was deployed correctly
+const token = new ethers.Contract(
+	tokenAddress,
+	[
+		'function name() view returns (string)',
+		'function symbol() view returns (string)',
+		'function totalSupply() view returns (uint256)',
+		'function tokenURI() view returns (string)',
+	],
+	provider
+);
+
+const [name, symbol, supply, uri] = await Promise.all([
+	token.name(),
+	token.symbol(),
+	token.totalSupply(),
+	token.tokenURI(),
+]);
+
+console.log('Name:', name);
+console.log('Symbol:', symbol);
+console.log('Supply:', ethers.formatEther(supply)); // 1,000,000,000
+console.log('Metadata:', uri);
+```
+
+<Note>
+	**Token Supply:** All RektHub tokens have a fixed supply of 1 billion tokens
+	with 18 decimals. 850M are tradeable, 150M reserved for graduation liquidity.
+</Note>
+
+### Bonus: Create with Vanity Address
+
+Want a custom token address like `0x000...` or `0xdead...`?
+
+```javascript
+// Mine a salt offchain first (this can take a while)
+function mineVanitySalt(prefix, implementationAddress, factoryAddress) {
+	let nonce = 0;
+	while (true) {
+		const salt = ethers.id(`vanity-${nonce}`);
+		const predicted = ethers.getCreate2Address(
+			factoryAddress,
+			salt,
+			ethers.keccak256(
+				ethers.concat([
+					'0x3d602d80600a3d3981f3363d3d373d3d3d363d73',
+					implementationAddress,
+					'0x5af43d82803e903d91602b57fd5bf3',
+				])
+			)
+		);
+
+		if (predicted.toLowerCase().startsWith(prefix.toLowerCase())) {
+			return { salt, address: predicted };
+		}
+		nonce++;
+
+		if (nonce % 10000 === 0) {
+			console.log(`Tried ${nonce} combinations...`);
+		}
+	}
+}
+
+// Use the mined salt
+const { salt, address } = mineVanitySalt('0x0000', tokenImpl, factoryAddress);
+console.log('Found vanity address:', address);
+
+const tx = await factory.createTokenDeterministic(
+	'Vanity Token',
+	'VNTY',
+	metadataURI,
+	salt,
+	{ value: creationFee }
+);
+```
+
+<Warning>
+	**Vanity Mining:** Finding addresses with specific prefixes can take hours/days
+	depending on length. Mine offchain, then deploy with the found salt.
+</Warning>
+
+## Listening to Events
+
+Track real-time activity across all creator tokens:
+
+```javascript
+import { ethers } from 'ethers';
+
+const FACTORY_ADDRESS = '0x...';
+const FACTORY_ABI = [
+	'event TokenPurchased(address indexed token, address indexed curve, address indexed buyer, uint256 nativeIn, uint256 tokensOut, uint256 totalFee, uint256 creatorFee, uint256 platformFee, uint256 newRealNativeReserves, uint256 newRealTokenReserves, uint256 newVirtualNativeReserves, uint256 newVirtualTokenReserves)',
+	'event TokenSold(address indexed token, address indexed curve, address indexed seller, uint256 tokensIn, uint256 nativeOut, uint256 totalFee, uint256 creatorFee, uint256 platformFee, uint256 newRealNativeReserves, uint256 newRealTokenReserves, uint256 newVirtualNativeReserves, uint256 newVirtualTokenReserves)',
+	'event TokenCreated(address indexed tokenAddress, address indexed curveAddress, address indexed creator, string name, string symbol, string uri, uint256 realNativeReserves, uint256 realTokenReserves, uint256 virtualNativeReserves, uint256 virtualTokenReserves, uint256 creationFee)',
+];
+
+async function listenToActivity() {
+	const provider = new ethers.JsonRpcProvider('YOUR_RPC_URL');
+	const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, provider);
+
+	// Listen for new token launches
+	factory.on(
+		'TokenCreated',
+		(tokenAddress, curveAddress, creator, name, symbol) => {
+			console.log(`🚀 New token launched: ${name} (${symbol})`);
+			console.log(`   Creator: ${creator}`);
+			console.log(`   Token: ${tokenAddress}`);
+		}
+	);
+
+	// Listen for buys
+	factory.on(
+		'TokenPurchased',
+		(token, curve, buyer, nativeIn, tokensOut, totalFee, creatorFee) => {
+			console.log(`💰 Buy: ${ethers.formatEther(tokensOut)} tokens`);
+			console.log(`   Spent: ${ethers.formatEther(nativeIn)}`);
+			console.log(`   Creator earned: ${ethers.formatEther(creatorFee)}`);
+		}
+	);
+
+	// Listen for sells
+	factory.on(
+		'TokenSold',
+		(token, curve, seller, tokensIn, nativeOut, totalFee, creatorFee) => {
+			console.log(`📉 Sell: ${ethers.formatEther(tokensIn)} tokens`);
+			console.log(`   Received: ${ethers.formatEther(nativeOut)}`);
+			console.log(`   Creator earned: ${ethers.formatEther(creatorFee)}`);
+		}
+	);
+}
+```
+
+## Common Integration Patterns
+
+### Building Trading UIs
+
+```javascript
+// Real-time price updates
+async function getPriceQuote(tokenAddress, amountIn) {
+	const curveAddress = await factory.getCurve(tokenAddress);
+	const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
+
+	const [tokensOut, totalFee, creatorFee, platformFee] = await curve.getBuyPrice(
+		amountIn
+	);
+
+	return {
+		tokensOut,
+		totalFee,
+		creatorFee,
+		platformFee,
+		effectivePrice: amountIn / tokensOut,
+	};
+}
+
+// Chart data from events
+async function getTradeHistory(tokenAddress, fromBlock) {
+	const filter = factory.filters.TokenPurchased(tokenAddress);
+	const events = await factory.queryFilter(filter, fromBlock);
+
+	return events.map((e) => ({
+		timestamp: e.blockNumber,
+		price: e.args.nativeIn / e.args.tokensOut,
+		volume: e.args.tokensOut,
+		buyer: e.args.buyer,
+	}));
+}
+```
+
+### Building Aggregators
+
+```javascript
+// Discover trending tokens
+async function getTrendingTokens(fromBlock) {
+	const createdFilter = factory.filters.TokenCreated();
+	const tokens = await factory.queryFilter(createdFilter, fromBlock);
+
+	// Get trade volume for each
+	const withVolume = await Promise.all(
+		tokens.map(async (t) => {
+			const buyFilter = factory.filters.TokenPurchased(t.args.tokenAddress);
+			const trades = await factory.queryFilter(buyFilter, fromBlock);
+
+			const volume = trades.reduce((sum, trade) => sum + trade.args.nativeIn, 0n);
+
+			return {
+				address: t.args.tokenAddress,
+				name: t.args.name,
+				symbol: t.args.symbol,
+				creator: t.args.creator,
+				volume: ethers.formatEther(volume),
+			};
+		})
+	);
+
+	// Sort by volume
+	return withVolume.sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume));
+}
+```
+
+### Building Trading Bots
+
+```javascript
+// Simple momentum bot example
+async function momentumBot(tokenAddress, thresholds) {
+	const curve = await getCurveContract(tokenAddress);
+
+	// Monitor price changes
+	factory.on('TokenPurchased', async (token, _, __, nativeIn, tokensOut) => {
+		if (token !== tokenAddress) return;
+
+		const priceImpact = calculatePriceImpact(nativeIn, tokensOut);
+
+		if (priceImpact > thresholds.buyThreshold) {
+			// Momentum detected, execute buy
+			await executeBuy(tokenAddress /* amount */);
+		}
+	});
+
+	// Set take-profit/stop-loss logic
+	// ... your trading strategy here
+}
+```
+
+<Warning>
+	**Trading bots carry risk.** Always test thoroughly on testnets and use
+	appropriate risk management.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Buying Guide'
+		icon='cart-shopping'
+		href='/evm/guides/buying-tokens'
+	>
+		Deep dive into buying tokens with advanced patterns
+	</Card>
+	<Card
+		title='Selling Guide'
+		icon='hand-holding-dollar'
+		href='/evm/guides/selling-tokens'
+	>
+		Learn about selling strategies and percentage-based sells
+	</Card>
+	<Card
+		title='Factory Contract'
+		icon='industry'
+		href='/evm/contracts/factory'
+	>
+		Complete factory contract reference
+	</Card>
+	<Card
+		title='Events Reference'
+		icon='bell'
+		href='/evm/reference/events'
+	>
+		All events you can listen to
+	</Card>
+</CardGroup>
+
+## Get Help
+
+<CardGroup cols={3}>
+	<Card
+		title='GitHub'
+		icon='github'
+		href='https://github.com/organizations/RektHub-Ecosystem'
+	>
+		View source code and examples
+	</Card>
+	<Card
+		title='Telegram'
+		icon='telegram'
+		href='https://t.me/rekthub_io'
+	>
+		Join our developer community
+	</Card>
+	<Card
+		title='X (Twitter)'
+		icon='x-twitter'
+		href='https://x.com/rekthub_io'
+	>
+		Follow for updates
+	</Card>
+</CardGroup>

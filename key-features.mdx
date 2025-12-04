@@ -1,0 +1,451 @@
+---
+description: 'Everything that makes RektHub the creator economy hub'
+---
+
+## Cross-Chain Infrastructure
+
+### One-Click Trading From Anywhere
+
+Launch a token on any chain. Anyone can buy it from any other chain using their native crypto. No wrapped tokens, no multi-step processes.
+
+<CardGroup cols={2}>
+	<Card
+		title='Intent-Based Routing'
+		icon='brain'
+	>
+		You say "What", We handle "How"
+	</Card>
+	<Card
+		title='Fast Settlement'
+		icon='timer'
+	>
+		Instant settlement across chains
+	</Card>
+	<Card
+		title='Your Keys Always'
+		icon='key'
+	>
+		No custody risk, ever
+	</Card>
+	<Card
+		title='Interoperable'
+		icon='arrows-spin'
+	>
+		Works across all supported chains
+	</Card>
+</CardGroup>
+
+<Tip>
+	Powered by [Khalani Network](https://khalani.gitbook.io/khalani-docs/) for
+	cross-chain routing and settlement.
+</Tip>
+
+### Supported Chains
+
+<Tabs>
+	<Tab title='Live Chains'>
+		- Ethereum Sepolia
+		- Base Sepolia
+		- Arbitrum Sepolia
+		- Polygon Amoy
+		- BSC Testnet
+		- Zircuit Garfield
+		- Solana Devnet
+	</Tab>
+
+    <Tab title='Coming Soon'>
+    	- Mainnet chains of the already integrated testnet chains
+    	- Avalanche
+    	- Optimism
+    	- zkSync
+    	- Sui
+    	- Move chains
+
+    	*Want RektHub on your chain? [Reach out](https://t.me/rekthub_io)*
+    </Tab>
+
+</Tabs>
+
+### Fair Launch Mechanics
+
+Every token starts from the same place. No pre-sales, no insider allocations, no team tokens.
+
+<CodeGroup>
+
+```solidity Token Distribution
+totalSupply = 1,000,000,000 tokens
+
+// Distribution at launch
+creatorAllocation = 0 tokens        // Creator gets ZERO
+teamAllocation = 0 tokens            // Team gets ZERO
+tradeableSupply = 850,000,000 tokens // On bonding curve
+reservedForDEX = 150,000,000 tokens  // For graduation
+
+// Everyone buys from the curve
+```
+
+```javascript Fair Launch Guarantee
+const fairLaunchRules = {
+	creatorAdvantage: false,
+	insiderAccess: false,
+	specialAllocations: false,
+	everyonePays: 'same price at same time',
+};
+```
+
+</CodeGroup>
+
+### Deterministic Vanity Addresses
+
+Want your token at a specific address? Use CREATE2 for vanity addresses.
+
+<Steps>
+	<Step title='Mine Salt Off-Chain'>
+		Use a mining tool to find a salt that produces your desired address pattern
+	</Step>
+	<Step title='Deploy Deterministically'>
+		Call `createTokenDeterministic()` with your mined salt
+	</Step>
+	<Step title='Get Vanity Address'>
+		Your token deploys at the exact address you wanted
+	</Step>
+</Steps>
+
+<Accordion title="Example: Mining for 0xDEAD prefix">
+
+```javascript
+// Pseudo-code for mining
+function mineVanitySalt(desiredPrefix) {
+	let salt = 0;
+	while (true) {
+		const predictedAddress = predictAddress(salt);
+		if (predictedAddress.startsWith(desiredPrefix)) {
+			return salt;
+		}
+		salt++;
+	}
+}
+
+const salt = mineVanitySalt('0xDEAD');
+await factory.createTokenDeterministic(name, symbol, uri, salt);
+```
+
+</Accordion>
+
+---
+
+## Community Features
+
+### Real-Time Activity Feeds
+
+Track what's happening across all tokens:
+
+<Tabs>
+	<Tab title='Trading Activity'>
+		- Buys and sells streaming live (charts and notifs)
+		- Volume and price metrics updated real-time
+	</Tab>
+
+    <Tab title='Creator Actions'>
+    	- Metadata updates
+    	- Fee claims
+    	- Token graduation events
+    </Tab>
+
+</Tabs>
+
+<Note>
+	Additional community features are in development. We're focused on building
+	tools that empower creators without extracting value from their communities.
+</Note>
+
+---
+
+## Creator Economics
+
+### Accumulate Trading Fees
+
+Earn 30% of all trading fees from your token. Fees accumulate in your bonding curve contract, claim anytime.
+
+<CodeGroup>
+
+```javascript Fee Calculation
+// On every trade
+const tradingFee = tradeAmount * 0.01; // 1% total fee
+const creatorShare = tradingFee * 0.3; // 30% to you
+const platformShare = tradingFee * 0.7; // 70% to platform
+
+// Accumulates in your curve
+accumulatedCreatorFees += creatorShare;
+```
+
+```javascript Example Earnings
+// Your token does $100,000 in volume
+const volume = 100000;
+const totalFees = volume * 0.01; // $1,000
+const yourEarnings = totalFees * 0.3; // $300
+
+// Claim anytime
+await bondingCurve.claimCreatorFees();
+```
+
+</CodeGroup>
+
+<Tip>
+	**No waiting periods.** Claim once, claim daily, claim after bonding, it's your
+	choice.
+</Tip>
+
+### Migration Rewards
+
+When your token graduates to a DEX, you earn 60% of the 12% migration fee.
+
+<Steps>
+	<Step title='Token Bonds (850M sold)'>
+		Your curve has accumulated liquidity (e.g., 5 ETH)
+	</Step>
+	<Step title='Migration Fee Charged'>
+		12% of liquidity = 0.6 ETH migration fee
+	</Step>
+	<Step title='You Get 60%'>
+		60% of 0.6 ETH = 0.36 ETH (~$1,080) added to your claimable fees
+	</Step>
+	<Step title='Platform Gets 40%'>
+		40% of 0.6 ETH = 0.24 ETH sustains migration infrastructure
+	</Step>
+</Steps>
+
+**Example: 5 ETH bonding liquidity**
+
+| Component              | Amount                | USD Value (ETH @ $3,000) |
+| ---------------------- | --------------------- | ------------------------ |
+| Total Liquidity        | 5 ETH                 | $15,000                  |
+| Migration Fee (12%)    | 0.6 ETH               | $1,800                   |
+| **Creator Gets (60%)** | **0.36 ETH**          | **$1,080**               |
+| Platform Gets (40%)    | 0.24 ETH              | $720                     |
+| To DEX                 | 4.4 ETH + 150M tokens | $13,200                  |
+
+### Control Your Graduation
+
+You decide when and where your token graduates (once bonded), options?.
+
+<CardGroup cols={3}>
+	<Card
+		title='Uniswap'
+		icon='unicorn'
+	>
+		Deep liquidity, proven infrastructure
+	</Card>
+	<Card
+		title='PancakeSwap'
+		icon='pancakes'
+	>
+		Multi-chain support, low fees
+	</Card>
+	<Card
+		title='Aerodrome'
+		icon='plane'
+	>
+		Base-native DEX, optimized routing
+	</Card>
+</CardGroup>
+
+<Note>
+	More DEX integrations coming. Want a specific DEX supported? [Let us
+	know](https://t.me/rekthub_io).
+</Note>
+
+### Future Monetization
+
+We're building additional creator tools that don't rely on ads or extractive tactics:
+
+<AccordionGroup>
+	<Accordion
+		title='Utility Attachments'
+		icon='plug'
+	>
+		Attach utilities to your token, access passes, premium features, etc. Monetize without compromising community.
+	</Accordion>
+
+    <Accordion
+    	title='x402 Features'
+    	icon='lock'
+    >
+    	Revenue streams we're not ready to announce yet. Building in stealth mode.
+    </Accordion>
+
+</AccordionGroup>
+
+---
+
+## Technical Features
+
+### Gas-Optimized Clone Pattern
+
+Each token deployment uses minimal gas through OpenZeppelin's clone pattern.
+
+```solidity
+// One implementation deployed
+tokenImplementation = new RektHubToken();
+curveImplementation = new BondingCurve();
+
+// Thousands of tokens deployed as clones
+for (each token launch) {
+  token = Clones.clone(tokenImplementation);  // ~cheap gas
+  curve = Clones.clone(curveImplementation);  // ~cheap gas
+}
+
+// vs deploying fresh contracts (~expensive gas each)
+```
+
+<Tip>
+	**Why it matters:** Cheaper launches = more creators = more opportunities for
+	everyone.
+</Tip>
+
+### Isolated Bonding Curves
+
+Every token gets its own trading contract. No shared state, no cross-contamination.
+
+<Tabs>
+	<Tab title='Isolated Architecture'>
+		```
+		Token A -> Curve A -> Reserves A -> Fees A
+		Token B -> Curve B -> Reserves B -> Fees B
+		Token C -> Curve C -> Reserves C -> Fees C
+		```
+		
+		Each curve is completely independent. A bug in one doesn't affect others. Although, for simplicity, you can invoke buy and sell methods on a known curve from the main factory
+	</Tab>
+
+    <Tab title='Benefits'>
+    	- **Security:** Isolated risk per token
+    	- **Simplicity:** One curve, one token, clear logic
+    	- **Flexibility:** Each curve can be customized
+    	- **Scalability:** Add tokens without affecting existing ones
+    </Tab>
+
+</Tabs>
+
+### Proven AMM Mechanics
+
+Constant product formula (x × y = k) with virtual reserves for instant price discovery without requiring creators to add liquidity.
+
+```javascript
+// Standard AMM (requires real liquidity)
+realX * realY = k
+
+// RektHub uses virtual reserves
+virtualX * virtualY = k
+
+// Enables trading from day one with zero liquidity seeded
+```
+
+<Accordion title="Why virtual reserves?">
+Virtual reserves enable **instant trading without requiring creators to provide liquidity**.
+
+**Traditional DEX approach:**
+
+- Creator must seed liquidity pool (e.g., 100 ETH + 1B tokens)
+- Requires significant upfront capital
+- Creator takes on impermanent loss risk
+
+**RektHub approach:**
+
+- Virtual reserves create pricing formula from launch
+- First buyer: Gets 35M tokens for 0.1 ETH (price calculated from virtuals)
+- Second buyer: Gets 33M tokens for 0.1 ETH (stable progression)
+- No liquidity needed - the curve IS the market maker
+
+**The math:**
+
+```javascript
+// At launch (no real liquidity seeded)
+virtualNativeReserves = 1.5 ETH    // Virtual, not real
+virtualTokenReserves = 1.073B      // Virtual, not real
+realNativeReserves = 0             // Actually zero!
+realTokenReserves = 850M           // Real tokens available
+
+// Price still calculable from virtuals
+price = virtualNative / virtualToken
+```
+
+Virtual reserves eliminate the need for liquidity pools during the bonding phase. The curve itself provides liquidity using the constant product formula, with liquidity only forming for DEX graduation once 850M tokens are sold.
+
+</Accordion>
+
+### Creator Fee Claims
+
+Claim your accumulated fees anytime. No waiting periods, no restrictions.
+
+<CodeGroup>
+
+```javascript Check Fees
+const [creator, accumulatedFees] = await curve.getCreatorInfo();
+console.log(`Claimable: ${ethers.formatEther(accumulatedFees)} ETH`);
+```
+
+```javascript Claim Fees
+const tx = await curve.claimCreatorFees();
+await tx.wait();
+console.log('Fees claimed!');
+```
+
+</CodeGroup>
+
+### Token Metadata URIs
+
+Update your token's metadata anytime as creator.
+
+```javascript
+// Metadata JSON structure
+{
+  "name": "Creator Token",
+  "description": "Token for my community",
+  "image": "ipfs://...",
+  "external_url": "https://myproject.com",
+  "socials": {
+    "twitter": "https://x.com/myproject",
+    "telegram": "https://t.me/myproject",
+    "discord": "https://discord.gg/myproject"
+  }
+}
+
+// Update URI
+await token.setTokenURI("ipfs://new-metadata-hash");
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+	<Card
+		title='Bonding Curves Deep Dive'
+		icon='chart-area'
+		href='/getting-started/bonding-curves'
+	>
+		Understand the math behind fair launches
+	</Card>
+	<Card
+		title='Fee Structure Details'
+		icon='coins'
+		href='/getting-started/fee-structure'
+	>
+		See exactly how much you can earn
+	</Card>
+	<Card
+		title='Integration Guide'
+		icon='code'
+		href='/evm/quickstart'
+	>
+		Start building on RektHub
+	</Card>
+	<Card
+		title='Contract Reference'
+		icon='file-contract'
+		href='/evm/contracts/factory'
+	>
+		Explore the smart contracts
+	</Card>
+</CardGroup>

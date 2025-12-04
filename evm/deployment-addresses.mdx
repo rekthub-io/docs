@@ -1,0 +1,261 @@
+---
+description: 'RektHub contract addresses across all supported chains'
+---
+
+## Mainnet Deployments
+
+<Info>
+	**Mainnet launch coming soon!** We're currently in testnet phase. Join the
+	[waitlist](https://rekthub.io/#waitlist) for early access.
+</Info>
+
+| Chain                 | Factory Address | Token Implementation | Curve Implementation | Explorer                                                | Status      |
+| --------------------- | --------------- | -------------------- | -------------------- | ------------------------------------------------------- | ----------- |
+| **Ethereum Mainnet**  | `TBD`           | `TBD`                | `TBD`                | [Etherscan](https://etherscan.io)                       | Coming Soon |
+| **Base**              | `TBD`           | `TBD`                | `TBD`                | [Basescan](https://basescan.org)                        | Coming Soon |
+| **Arbitrum One**      | `TBD`           | `TBD`                | `TBD`                | [Arbiscan](https://arbiscan.io)                         | Coming Soon |
+| **Polygon**           | `TBD`           | `TBD`                | `TBD`                | [Polygonscan](https://polygonscan.com)                  | Coming Soon |
+| **Optimism**          | `TBD`           | `TBD`                | `TBD`                | [Optimistic Etherscan](https://optimistic.etherscan.io) | Coming Soon |
+| **BNB Chain**         | `TBD`           | `TBD`                | `TBD`                | [BscScan](https://bscscan.com)                          | Coming Soon |
+| **Avalanche C-Chain** | `TBD`           | `TBD`                | `TBD`                | [Snowtrace](https://snowtrace.io)                       | Coming Soon |
+| **Zircuit**           | `TBD`           | `TBD`                | `TBD`                | [Zircuit Explorer](https://explorer.zircuit.com)        | Coming Soon |
+| **Linea**             | `TBD`           | `TBD`                | `TBD`                | [Lineascan](https://lineascan.build)                    | Coming Soon |
+
+## Testnet Deployments
+
+### Ethereum Sepolia
+
+| Contract                 | Address                                      |
+| ------------------------ | -------------------------------------------- |
+| **RektHubFactory**       | `0x5BEfF2C2bd76F6FA35bFc6aCefA62fd5f9FF5426` |
+| **Token Implementation** | `0x95e927a3eb7036b12f003b0e27cabd52da80d321` |
+| **Curve Implementation** | `0x6aba379d67fee65e6faba83c120abffe701ac492` |
+
+**Network Details:**
+
+- Chain ID: `11155111`
+- RPC URL: `https://sepolia.infura.io/v3/YOUR-API-KEY`
+- Block Explorer: [Sepolia Etherscan](https://sepolia.etherscan.io)
+- Faucet: [Sepolia Faucet](https://sepoliafaucet.com)
+
+### Base Sepolia
+
+| Contract                 | Address |
+| ------------------------ | ------- |
+| **RektHubFactory**       | `TBD`   |
+| **Token Implementation** | `TBD`   |
+| **Curve Implementation** | `TBD`   |
+
+**Network Details:**
+
+- Chain ID: `84532`
+- RPC URL: `https://sepolia.base.org`
+- Block Explorer: [Base Sepolia Scan](https://sepolia.basescan.org)
+- Faucet: [Base Faucet](https://www.coinbase.com/faucets/base-ethereum-goerli-faucet)
+
+### Arbitrum Sepolia
+
+| Contract                 | Address |
+| ------------------------ | ------- |
+| **RektHubFactory**       | `TBD`   |
+| **Token Implementation** | `TBD`   |
+| **Curve Implementation** | `TBD`   |
+
+**Network Details:**
+
+- Chain ID: `421614`
+- RPC URL: `https://sepolia-rollup.arbitrum.io/rpc`
+- Block Explorer: [Arbitrum Sepolia Explorer](https://sepolia.arbiscan.io)
+- Faucet: [Arbitrum Faucet](https://faucet.quicknode.com/arbitrum/sepolia)
+
+## Contract Verification
+
+All RektHub contracts are verified on their respective block explorers. You can:
+
+1. **View source code** directly on the explorer
+2. **Interact with contracts** using the Write/Read Contract interface
+3. **Verify deployments** by checking constructor arguments
+4. **Audit implementations** since all code is open source
+
+<Tip>
+	**Need the ABI?** Visit the contract on any block explorer and look for the
+	"Contract" tab. The ABI is available in JSON format.
+</Tip>
+
+## Using Contract Addresses
+
+### In Your Code
+
+```javascript
+// Import from your config
+import { FACTORY_ADDRESS } from './config';
+
+const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, provider);
+```
+
+### Multi-Chain Configuration
+
+```javascript
+// config/contracts.js
+const CONTRACTS = {
+	// Mainnet
+	1: {
+		// Ethereum
+		factory: '0x...',
+		tokenImpl: '0x...',
+		curveImpl: '0x...',
+	},
+	8453: {
+		// Base
+		factory: '0x...',
+		tokenImpl: '0x...',
+		curveImpl: '0x...',
+	},
+	42161: {
+		// Arbitrum
+		factory: '0x...',
+		tokenImpl: '0x...',
+		curveImpl: '0x...',
+	},
+
+	// Testnets
+	11155111: {
+		// Sepolia
+		factory: '0x...',
+		tokenImpl: '0x...',
+		curveImpl: '0x...',
+	},
+};
+
+export function getContracts(chainId) {
+	if (!CONTRACTS[chainId]) {
+		throw new Error(`Chain ${chainId} not supported`);
+	}
+	return CONTRACTS[chainId];
+}
+```
+
+## Implementation Contracts
+
+<Note>
+	RektHub uses the **minimal proxy pattern (EIP-1167)** for gas-efficient
+	deployments. The implementation contracts are deployed once per chain, and each
+	token/curve is a minimal proxy pointing to these implementations.
+</Note>
+
+### What are Implementation Contracts?
+
+- **Token Implementation**: The master ERC20 contract that all tokens clone
+- **Curve Implementation**: The master bonding curve logic that all curves clone
+- **Gas Savings**: Creating new tokens costs ~100k gas instead of ~3M gas
+
+### Why This Matters
+
+- You **cannot** interact directly with implementation contracts
+- Always use the **Factory** to create tokens and trade
+- Each token/curve has its **own address** and isolated state
+- Implementations are **immutable**
+
+## Chain Integration Status
+
+### Live Chains
+
+Currently in testnet phase across all chains.
+
+### In Progress
+
+Mainnet deployments pending and in final testing.
+
+### Coming Soon
+
+- Other non EVM chains?
+- More EVM chains based on community demand
+
+<CardGroup cols={2}>
+	<Card
+		title='Request a Chain'
+		icon='plus'
+		href='https://t.me/rekthub_io'
+	>
+		Want RektHub on your favorite chain? Let us know in Telegram
+	</Card>
+	<Card
+		title='Integration Guide'
+		icon='plug'
+		href='/evm/quickstart'
+	>
+		Start building on existing chains
+	</Card>
+</CardGroup>
+
+## Migration Tracking
+
+When tokens graduate to DEX, migration events are emitted by the Factory:
+
+```javascript
+// Listen for migrations across all chains
+factory.on(
+	'TokenMigrated',
+	(
+		tokenAddress,
+		curveAddress,
+		poolAddress,
+		platformName,
+		nativeLiquidity,
+		tokenLiquidity,
+		migrationFee,
+		creatorFee,
+		platformFee
+	) => {
+		console.log(`Token ${tokenAddress} graduated to ${platformName}`);
+		console.log(`Pool address: ${poolAddress}`);
+		console.log(
+			`Liquidity: ${ethers.formatEther(nativeLiquidity)} native tokens`
+		);
+	}
+);
+```
+
+## Updates & Notifications
+
+<Info>
+	**Stay updated on new deployments:** - Follow us on [X
+	(Twitter)](https://x.com/rekthub_io) - Join our
+	[Telegram](https://t.me/rekthub_io) - Watch our
+	[GitHub](https://github.com/organizations/RektHub-Ecosystem)
+</Info>
+
+## Need Help?
+
+<CardGroup cols={3}>
+	<Card
+		title='Developer Chat'
+		icon='telegram'
+		href='https://t.me/rekthub_io'
+	>
+		Technical questions and support
+	</Card>
+	<Card
+		title='Bug Reports'
+		icon='github'
+		href='https://github.com/organizations/RektHub-Ecosystem'
+	>
+		Found an issue? Let us know
+	</Card>
+	<Card
+		title='Email Support'
+		icon='envelope'
+		href='mailto:rekthub.io@gmail.com'
+	>
+		Business inquiries
+	</Card>
+</CardGroup>
+
+---
+
+<Note>
+	**Want RektHub on your chain?** We're always open to integrating new
+	EVM-compatible chains. Reach out on [Telegram](https://t.me/rekthub_io) with: -
+	Chain name and details - Expected user base - Why RektHub would benefit your
+	ecosystem Let's build the creator economy together.
+</Note>
